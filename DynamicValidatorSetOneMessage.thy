@@ -23,13 +23,13 @@ begin
 (* many things are copied and adjusted from @nano-o's contribution. *)
 
 locale byz_quorums =
-  -- "Here we fix two types @{typ 'q1} and @{typ 'q2} for quorums and one type @{typ 'v} for
+  -- "Here we fix two types @{typ 'q2} and @{typ 'q1} for quorums and one type @{typ 'v} for
       validator sets. of cardinality greater than 2/3 of 
 the validators and quorum of cardinality greater than 1/3 of the validators."
   fixes member_1 :: "'n \<Rightarrow> 'q1 \<Rightarrow> 'v \<Rightarrow> bool" ("_ \<in>\<^sub>1 _ of _" 50)
-    -- "Membership in 2/3 set"
-    and member_2 :: "'n \<Rightarrow> 'q2 \<Rightarrow> 'v \<Rightarrow> bool" ("_ \<in>\<^sub>2 _ of _" 50)
     -- "Membership in 1/3 set"
+    and member_2 :: "'n \<Rightarrow> 'q2 \<Rightarrow> 'v \<Rightarrow> bool" ("_ \<in>\<^sub>2 _ of _" 50)
+    -- "Membership in 2/3 set"
   fixes
     hash_parent :: "'h \<Rightarrow> 'h \<Rightarrow> bool" (infix "\<leftarrow>" 50) (* parent <- child *)
   fixes
@@ -47,10 +47,12 @@ should be dropped."
   -- "a hash has at most one parent which is not itself"
   "\<And> h1 h2 . h1 \<leftarrow> h2 \<Longrightarrow> h1 \<noteq> h2"
   and "\<And> h1 h2 h3 . \<lbrakk>h2 \<leftarrow> h1; h3 \<leftarrow> h1\<rbrakk> \<Longrightarrow> h2 = h3"
-  and "\<And> q1 q2 vs. \<exists> q3 . \<forall> n . (n \<in>\<^sub>2 q3 of vs) \<longrightarrow> (n \<in>\<^sub>1 q1 of vs) \<and> (n \<in>\<^sub>1 q2 of vs)"  
-
+  and "\<And> q1 q2 vs. \<exists> q3 . \<forall> n . (n \<in>\<^sub>1 q3 of vs) \<longrightarrow> (n \<in>\<^sub>2 q1 of vs) \<and> (n \<in>\<^sub>2 q2 of vs)"
     -- "This is the only property of types @{typ 'q1} and @{typ 'q2} that we need:
-2/3 quorums have 1/3 intersection"
+    2/3 quorums have 1/3 intersection"
+
+    -- "2/3-lb quorums have (1/3 - 4/3 \<epsilon>)-ub intersection"
+
 
 (* how do we get the forward and the backward validator set? *)
 record ('n,'h)state =
@@ -63,7 +65,7 @@ locale casper = byz_quorums
 begin
 
 lemma hoge:
-  "\<exists> q.  \<forall> n.  (n \<in>\<^sub>2 q of (vset_fwd root)) \<longrightarrow> ((n \<in>\<^sub>1 q0 of (vset_fwd root)) \<and> (n \<in>\<^sub>1 q1 of (vset_fwd root)))"
+  "\<exists> q.  \<forall> n.  (n \<in>\<^sub>1 q of (vset_fwd root)) \<longrightarrow> ((n \<in>\<^sub>2 q0 of (vset_fwd root)) \<and> (n \<in>\<^sub>2 q1 of (vset_fwd root)))"
   using byz_quorums_axioms byz_quorums_def by force
 
 inductive nth_parent where
@@ -73,7 +75,7 @@ inductive nth_parent where
 definition voted_by where
   "voted_by s q vset orig v2 h v1 \<equiv>
      v1 \<noteq> 0 \<and> v2 < v1 \<and> nth_parent (v1 - v2) orig h \<and>
-     (\<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> vote_msg s n h v1 v2)"
+     (\<forall> n. (n \<in>\<^sub>2 q of vset) \<longrightarrow> vote_msg s n h v1 v2)"
 
 (* the forward set and the backward set must be taken from orig, not from h.
  * Otherwise, there is a forking situation.
@@ -125,14 +127,14 @@ inductive justified_with_root where
     justified_with_root r rE mode s h ee newM"
 
 inductive finalized_with_root where
-  under_usual_link:
+ under_usual_link:
     "justified_with_root r rE mode s orig origE Usual \<Longrightarrow>
      usual_link s q0 q1 orig origE new (origE + 1) \<Longrightarrow>
      finalized_with_root r rE mode s orig new origE Usual"
   | under_changing_link:
     "justified_with_root r rE mode s c e FinalizingChild \<Longrightarrow>
      validator_changing_link s q0 q1 c e h (e + 1) \<Longrightarrow>
-     finalized_with_root r rE mode s c h e FinalizingChild"
+      finalized_with_root r rE mode s c h e FinalizingChild"
 
 abbreviation justified where
   "justified s h v m \<equiv> justified_with_root genesis 0 Usual s h v m"
@@ -143,7 +145,7 @@ definition fork where
      \<not>(h1 \<leftarrow>\<^sup>* h0 \<or> h0 \<leftarrow>\<^sup>* h1 \<or> h0 = h1))"
 
 definition slashed_dbl where "slashed_dbl s n \<equiv>
-  \<exists> h0 h1 v v0 v1. (h0 \<noteq> h1 \<or> v0 \<noteq> v1) \<and> vote_msg s n h0 v v0 \<and> vote_msg s n h1 v v1"
+  \<exists> h0 h1 v v0 v1. (h0 \<noteq> h1 \<or> v0 \<noteq> v1) \<and> vote_msg s n h0 v v0 \<and> vote_msg s n h1 v v1" (* not v, maybe e for epoch *)
 (* source difference needs to be punished as well, for
  * https://ethresear.ch/t/casper-ffg-with-one-message-type-and-simpler-fork-choice-rule/103/41?u=yhirai *)
 
@@ -156,11 +158,12 @@ definition slashed where "slashed s n \<equiv>
 
 definition one_third_of_fwd_slashed where
 "one_third_of_fwd_slashed s h q \<equiv>
-  \<forall> n. (n \<in>\<^sub>2 q of (vset_fwd h)) \<longrightarrow> slashed s n"
+  \<forall> n. (n \<in>\<^sub>1 q of (vset_fwd h)) \<longrightarrow> slashed s n"
+(*  \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of (vset_fwd h)) \<longrightarrow> slashed s n" *)
 
 definition one_third_of_bwd_slashed where
 "one_third_of_bwd_slashed s h q \<equiv>
-  \<forall> n. (n \<in>\<^sub>2 q of (vset_bwd h)) \<longrightarrow> slashed s n"
+  \<forall> n. (n \<in>\<^sub>1 q of (vset_bwd h)) \<longrightarrow> slashed s n"
 
 definition one_third_of_fwd_or_bwd_slashed where
 "one_third_of_fwd_or_bwd_slashed s h q \<equiv>
@@ -168,7 +171,6 @@ definition one_third_of_fwd_or_bwd_slashed where
 
 (**** On your first read, JUMP to "intermediate stuff ends" at the end of this file. ****)
 (**** intermediate stuff starts ****)
-
 
 inductive justified_with_root_with_n_switchings where
   justified_genesis_n: "r = r' \<Longrightarrow> rE = rE' \<Longrightarrow> mode = mode' \<Longrightarrow>
@@ -892,7 +894,7 @@ next
     next
       case False
       then show ?thesis
-        by (smt One_nat_def Suc_eq_plus1 Suc_lessI a add_diff_inverse_nat casper.justified_with_root_with_n_switchings.intros(3) casper_axioms close_justification_def justified_on_finalization.hyps(1) justified_on_finalization.hyps(3) justified_on_finalization.hyps(4) justifies_higher le_less_trans le_neq_implies_less less_numeral_extra(3) nat_diff_split validator_changing_link_higher zero_less_diff)
+        by (smt One_nat_def Suc_leI Suc_pred a add_diff_inverse_nat add_gr_0 casper.justified_with_root_with_n_switchings.intros(3) casper.justifies_higher casper.validator_changing_link_higher casper_axioms close_justification_def diff_add_inverse2 justified_on_finalization.hyps(1) justified_on_finalization.hyps(3) justified_on_finalization.hyps(4) le_less_trans le_neq_implies_less nat_diff_split nat_neq_iff zero_less_diff)
     qed
   next
     case b
@@ -1270,22 +1272,22 @@ lemma double_vote:
   "voted_by s q0 vset p0 pv0 h0 v \<Longrightarrow>
    voted_by s q1 vset p1 pv1 h1 v \<Longrightarrow>
    h0 \<noteq> h1 \<or> pv0 \<noteq> pv1 \<Longrightarrow>
-   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset) \<longrightarrow> slashed s n"
+   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> slashed s n"
 proof -
   assume v0: "voted_by s q0 vset p0 pv0 h0 v"
   assume v1: "voted_by s q1 vset p1 pv1 h1 v"
-  have "\<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset) \<longrightarrow> (n \<in>\<^sub>1 q0 of vset) \<and> (n \<in>\<^sub>1 q1 of vset)"
+  have "\<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> (n \<in>\<^sub>2 q0 of vset) \<and> (n \<in>\<^sub>2 q1 of vset)"
     by (metis byz_quorums_axioms byz_quorums_def)
-  then obtain q where qP: "\<forall> n. (n \<in>\<^sub>2 q of vset) \<longrightarrow> (n \<in>\<^sub>1 q0 of vset) \<and> (n \<in>\<^sub>1 q1 of vset)"
+  then obtain q where qP: "\<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> (n \<in>\<^sub>2 q0 of vset) \<and> (n \<in>\<^sub>2 q1 of vset)"
     by blast
-  have vv0: "\<forall> n. (n \<in>\<^sub>2 q of vset) \<longrightarrow> vote_msg s n h0 v pv0"
+  have vv0: "\<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> vote_msg s n h0 v pv0"
     using qP v0 voted_by_def by blast
-  have vv1: "\<forall> n. (n \<in>\<^sub>2 q of vset) \<longrightarrow> vote_msg s n h1 v pv1"
+  have vv1: "\<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> vote_msg s n h1 v pv1"
     using qP v1 voted_by_def by blast
   assume diff: "h0 \<noteq> h1 \<or> pv0 \<noteq> pv1"
   have ddr: "\<forall> n. vote_msg s n h0 v pv0 \<longrightarrow> vote_msg s n h1 v pv1 \<longrightarrow> slashed_dbl s n"
     using diff slashed_dbl_def by fastforce
-  have "\<forall> n. (n \<in>\<^sub>2 q of vset) \<longrightarrow> slashed_dbl s n"
+  have "\<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> slashed_dbl s n"
     by (simp add: ddr vv0 vv1)
   then show ?thesis
     by (meson slashed_def)
@@ -1345,7 +1347,7 @@ lemma close_finalizations_cause_slashing_f_chosen :
     close_finalization s r rE FinalizingChild h1 v m1 \<Longrightarrow>
    \<not> justified_with_root h0 v m0 s h1 v m1 \<Longrightarrow>
    \<not> justified_with_root h1 v m1 s h0 v m0 \<Longrightarrow>
-   \<exists> q. (\<forall> n. (n \<in>\<^sub>2 q of (vset_chosen r)) \<longrightarrow> slashed s n)"
+   \<exists> q. (\<forall> n. (n \<in>\<^sub>1 q of (vset_chosen r)) \<longrightarrow> slashed s n)"
 proof -
   assume c0: "close_finalization s r rE FinalizingChild h0 v m0"
   assume c1: "close_finalization s r rE FinalizingChild h1 v m1"
@@ -1445,11 +1447,11 @@ proof -
   assume j: "justified s r rE FinalizingChild"
   obtain r' where r'P: "(\<exists>rE'. Ex (justified s r' rE')) \<and> (vset_fwd r' = vset_chosen r)"
     using a0 a1 close_finalizations_cause_slashing_f_chosen_becomes j j0 j1 by blast
-  have sl_orig: "\<exists> q. (\<forall> n. (n \<in>\<^sub>2 q of (vset_chosen r)) \<longrightarrow> slashed s n)"
+  have sl_orig: "\<exists> q. (\<forall> n. (n \<in>\<^sub>1 q of (vset_chosen r)) \<longrightarrow> slashed s n)"
     using a0 a1 close_finalizations_cause_slashing_f_chosen j j0 j1 by blast
   show ?thesis
   proof -
-    obtain dd :: 'd where
+    obtain dd where
       "one_third_of_fwd_slashed s r' dd"
       by (metis (no_types) one_third_of_fwd_slashed_def r'P sl_orig)
     then show ?thesis
@@ -1582,17 +1584,17 @@ lemma surround_concrete:
    voted_by s q1 vset h1 v1 ch1 chE \<Longrightarrow>
    origE < v1 \<Longrightarrow>
    chE < newE \<Longrightarrow>
-   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset) \<longrightarrow> slashed s n"
+   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> slashed s n"
 proof -
   assume v0: "voted_by s q0 vset orig origE new newE"
   assume v1: "voted_by s q1 vset h1 v1 ch1 chE"
-  have both: "\<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset) \<longrightarrow> (n \<in>\<^sub>1 q0 of vset) \<and> (n \<in>\<^sub>1 q1 of vset)"
+  have both: "\<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> (n \<in>\<^sub>2 q0 of vset) \<and> (n \<in>\<^sub>2 q1 of vset)"
     by (metis byz_quorums_axioms byz_quorums_def)
-  then obtain q where qP: "\<forall> n. (n \<in>\<^sub>2 q of vset) \<longrightarrow> (n \<in>\<^sub>1 q0 of vset) \<and> (n \<in>\<^sub>1 q1 of vset)"
+  then obtain q where qP: "\<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> (n \<in>\<^sub>2 q0 of vset) \<and> (n \<in>\<^sub>2 q1 of vset)"
     by blast
-  have vote0: "\<forall> n.  (n \<in>\<^sub>2 q of vset) \<longrightarrow> vote_msg s n new newE origE"
+  have vote0: "\<forall> n.  (n \<in>\<^sub>1 q of vset) \<longrightarrow> vote_msg s n new newE origE"
     by (meson casper.voted_by_def casper_axioms qP v0)
-  have vote1: "\<forall> n.  (n \<in>\<^sub>2 q of vset) \<longrightarrow> vote_msg s n ch1 chE v1"
+  have vote1: "\<forall> n.  (n \<in>\<^sub>1 q of vset) \<longrightarrow> vote_msg s n ch1 chE v1"
     by (meson casper.voted_by_def casper_axioms qP v1)
   assume orig_v1: " origE < v1"
   assume ch_new: "chE < newE"
@@ -1633,7 +1635,7 @@ next
       by (smt b casper.trivial_is_refl casper_axioms close_fj close_involves_vote trivial_is_refl0 usual_justification_n.hyps(1) usual_justification_n.prems(1) usual_justification_n.prems(2) usual_justification_n.prems(3) v0)
     have diff: "orig \<noteq> h1"
       by (metis Mode.simps(1) Suc_eq_plus1 Suc_lessI b casper.justified_genesis casper.usual_justification casper_axioms close_finalization_def orignt really_close_justification_zero usual_justification_n.hyps(1) usual_justification_n.hyps(3) usual_justification_n.hyps(4) usual_justification_n.hyps(5) usual_justification_n.prems(1) usual_justification_n.prems(5))
-    have sl: "\<exists> q. \<forall> n. (n \<in>\<^sub>2 q of (vset_fwd r)) \<longrightarrow> slashed s n"
+    have sl: "\<exists> q. \<forall> n. (n \<in>\<^sub>1 q of (vset_fwd r)) \<longrightarrow> slashed s n"
       using b casper.double_vote casper_axioms diff v0 v1 by fastforce
     show ?thesis
       by (metis Mode.simps(1) Suc_eq_plus1 Suc_lessI b casper.close_justification_def casper_axioms close_finalizations_cause_slashing_u_j close_fj diff justified_back_unique orignt really_close_justification_zero usual_justification_n.hyps(1) usual_justification_n.hyps(3) usual_justification_n.prems(1) usual_justification_n.prems(2) usual_justification_n.prems(3) usual_justification_n.prems(6))
@@ -1646,9 +1648,9 @@ next
         by (metis usual_justification_n.hyps(1) usual_justification_n.hyps(4) usual_justification_n.prems(2) usual_justification_n.prems(3) usual_link_def voted_by_both_def voted_by_fwd_def zero_switching_means)
       have v1: "\<exists> q1 ch1. voted_by s q1 (vset_fwd r) h1 v1 ch1 (v1 + 1)"
         using casper.close_finalization_has_child casper_axioms usual_justification_n.prems(1) usual_justification_n.prems(3) by fastforce
-      have sl: "\<exists> q. \<forall> n. (n \<in>\<^sub>2 q of (vset_fwd r)) \<longrightarrow> slashed s n"
+      have sl: "\<exists> q. \<forall> n. (n \<in>\<^sub>1 q of (vset_fwd r)) \<longrightarrow> slashed s n"
         using True c surround_concrete v0 v1 by blast
-      then obtain q where qP: "\<forall> n. (n \<in>\<^sub>2 q of (vset_fwd r)) \<longrightarrow> slashed s n"
+      then obtain q where qP: "\<forall> n. (n \<in>\<^sub>1 q of (vset_fwd r)) \<longrightarrow> slashed s n"
         by blast
       then have "one_third_of_fwd_or_bwd_slashed s r q"
         by (simp add: one_third_of_fwd_or_bwd_slashed_def one_third_of_fwd_slashed_def)
@@ -1678,7 +1680,7 @@ next
           by (metis Mode.simps(1) One_nat_def casper.close_justification_def casper.zero_switching_means casper_axioms ch1P close_fj one_switching_means usual_justification_n.prems(1) usual_justification_n.prems(3) usual_link_def v_fwd voted_by_both_def voted_by_bwd_def)
         have vr0: "\<exists> q. voted_by s q (vset_fwd r) orig origE new newE"
           by (simp add: v0)
-        have fwr_sl: "\<exists> q. \<forall> n. (n \<in>\<^sub>2 q of (vset_fwd r)) \<longrightarrow> slashed s n"
+        have fwr_sl: "\<exists> q. \<forall> n. (n \<in>\<^sub>1 q of (vset_fwd r)) \<longrightarrow> slashed s n"
           by (metis c casper.double_vote casper_axioms eq nat_neq_iff v0 vr1)
         have sl: "\<exists> q. one_third_of_fwd_or_bwd_slashed s r q"
           using fwr_sl one_third_of_fwd_or_bwd_slashed_def one_third_of_fwd_slashed_def by blast
@@ -1703,7 +1705,7 @@ next
           by (smt FinalizingChild Mode.simps(1) One_nat_def add.right_neutral add_Suc_right casper.close_justification_def casper.zero_switching_means casper_axioms ch1P close_fj diff_add_inverse2 less_Suc_eq less_diff_conv usual_justification_n.prems(1) usual_justification_n.prems(3) v_bwd validator_changing_link_def)
         have vr0: "\<exists> q. voted_by s q (vset_fwd r) orig origE new newE"
           by (simp add: v0)
-        have fwr_sl: "\<exists> q. \<forall> n. (n \<in>\<^sub>2 q of (vset_fwd r)) \<longrightarrow> slashed s n"
+        have fwr_sl: "\<exists> q. \<forall> n. (n \<in>\<^sub>1 q of (vset_fwd r)) \<longrightarrow> slashed s n"
           by (metis c casper.double_vote casper_axioms eq nat_neq_iff v0 vr1)
         have sl: "\<exists> q. one_third_of_fwd_or_bwd_slashed s r q"
           using fwr_sl one_third_of_fwd_or_bwd_slashed_def one_third_of_fwd_slashed_def by blast
@@ -1931,7 +1933,7 @@ proof(cases newM)
     by (metis Mode.simps(1) Suc_diff_Suc Suc_eq_plus1 Usual add_diff_inverse_nat diff_add_0 newMarith ul usual_link_higher)
   ultimately have e: "\<exists> q. voted_by s q (vset_fwd r) orig origE new v1 \<and> origE + 1 < v1"
     by simp
-  have ss: "\<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_fwd r) \<longrightarrow> slashed s n"
+  have ss: "\<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_fwd r) \<longrightarrow> slashed s n"
     by (metis casper.double_vote casper_axioms e f nat_neq_iff)
   have sl: "\<exists> q. one_third_of_fwd_or_bwd_slashed s r q"
     using one_third_of_fwd_or_bwd_slashed_def one_third_of_fwd_slashed_def ss by blast
@@ -1957,7 +1959,7 @@ next
     using FinalizingChild Mode.simps(1) newMarith by presburger
   ultimately have e: "\<exists> q. voted_by s q (vset_fwd r) orig origE new v1 \<and> origE + 1 = v1"
     by simp
-  have ss: "\<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_fwd r) \<longrightarrow> slashed s n"
+  have ss: "\<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_fwd r) \<longrightarrow> slashed s n"
     by (metis casper.double_vote casper_axioms e f nat_neq_iff)
   have sl: "\<exists> q. one_third_of_fwd_or_bwd_slashed s r q"
     using one_third_of_fwd_or_bwd_slashed_def one_third_of_fwd_slashed_def ss by blast
@@ -1984,7 +1986,7 @@ proof-
   have v_right: "\<exists> q p pE. voted_by s q (vset_fwd r) p pE h1 v1"
     by (metis casper.forget_n_switchings casper_axioms f fjn j justifies_higher leD one_switching_involves_root_vote v_left2 voted_by_higher)
   assume diff: "new \<noteq> h1 "
-  have ss: "\<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_fwd r) \<longrightarrow> slashed s n"
+  have ss: "\<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_fwd r) \<longrightarrow> slashed s n"
     by (meson casper.double_vote casper_axioms diff v_left2 v_right)
   have sl: "\<exists> q. one_third_of_fwd_or_bwd_slashed s r q"
     by (metis casper.zero_switching_means casper_axioms diff double_vote j one_third_of_fwd_or_bwd_slashed_def one_third_of_fwd_slashed_def ul usual_link_def v_left v_right)
@@ -2021,7 +2023,7 @@ proof(cases newM)
     by (metis Mode.simps(1) Suc_diff_Suc Suc_eq_plus1 Usual add_diff_inverse_nat diff_add_0 newMarith ul usual_link_higher)
   ultimately have e: "\<exists> q. voted_by s q (vset_fwd r) orig origE new v1 \<and> origE + 1 < v1"
     by simp
-  have ss: "\<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_fwd r) \<longrightarrow> slashed s n"
+  have ss: "\<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_fwd r) \<longrightarrow> slashed s n"
     by (metis casper.double_vote casper_axioms e f nat_neq_iff)
   have sl: "\<exists> q. one_third_of_fwd_or_bwd_slashed s r q"
     using one_third_of_fwd_or_bwd_slashed_def one_third_of_fwd_slashed_def ss by blast
@@ -2048,7 +2050,7 @@ next
     using FinalizingChild Mode.simps(1) newMarith by presburger
   ultimately have e: "\<exists> q. voted_by s q (vset_fwd r) orig origE new v1 \<and> origE + 1 = v1"
     by simp
-  have ss: "\<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_fwd r) \<longrightarrow> slashed s n"
+  have ss: "\<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_fwd r) \<longrightarrow> slashed s n"
     by (metis casper.double_vote casper_axioms e f nat_neq_iff)
   have sl: "\<exists> q. one_third_of_fwd_or_bwd_slashed s r q"
     using one_third_of_fwd_or_bwd_slashed_def one_third_of_fwd_slashed_def ss by blast
@@ -2076,7 +2078,7 @@ proof -
   have f2: "\<exists> q p pE. voted_by s q (vset_fwd r) p pE new v1"
     by (metis eq1 u usual_link_def voted_by_both_def voted_by_fwd_def)
   assume diff: "new \<noteq> h1"
-  have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_fwd r) \<longrightarrow> slashed s n"
+  have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_fwd r) \<longrightarrow> slashed s n"
     by (meson casper.double_vote casper_axioms diff f1 f2)
   then have slr: "\<exists> q. one_third_of_fwd_or_bwd_slashed s r q"
     by (metis (no_types, lifting) casper.forget_n_switchings casper.justified_is_voted_bwd casper.usual_link_def casper.voted_by_both_def casper_axioms diff double_vote f fjn j justifies_higher leD one_third_of_bwd_slashed_def one_third_of_fwd_or_bwd_slashed_def u voted_by_bwd_def voted_by_higher zero_switching_means)
@@ -2117,7 +2119,7 @@ next
 qed
 
 lemma fwd_slashed_means:
-  "\<exists> q. \<forall> n. (n \<in>\<^sub>2 q of (vset_fwd r)) \<longrightarrow> slashed s n \<Longrightarrow>
+  "\<exists> q. \<forall> n. (n \<in>\<^sub>1 q of (vset_fwd r)) \<longrightarrow> slashed s n \<Longrightarrow>
    \<exists>q. one_third_of_fwd_or_bwd_slashed s r q"
   by(auto simp add: one_third_of_fwd_or_bwd_slashed_def one_third_of_fwd_slashed_def)
 
@@ -2158,7 +2160,7 @@ next
       using close_finalization_has_child usual_justification_n.prems(2) usual_justification_n.prems(3) by blast
     have diff: "origE \<noteq> v1"
       using dblB by blast
-    have "\<exists> q. \<forall> n. (n \<in>\<^sub>2 q of (vset_fwd r)) \<longrightarrow> slashed s n"
+    have "\<exists> q. \<forall> n. (n \<in>\<^sub>1 q of (vset_fwd r)) \<longrightarrow> slashed s n"
       using casper.double_vote casper_axioms dblB vote0 vv1 by fastforce
     then have goal_sl: "\<exists>q. one_third_of_fwd_or_bwd_slashed s r q"
       using fwd_slashed_means by blast
@@ -2172,7 +2174,7 @@ next
       using casper.close_finalization_has_child casper_axioms usual_justification_n.prems(2) usual_justification_n.prems(3) by fastforce
     have vote0: "\<exists> q. voted_by s q (vset_fwd r) orig origE new newE"
       by (metis casper.usual_link_def casper.voted_by_both_def casper.voted_by_bwd_def casper_axioms one_switching_means usual_justification_n.hyps(1) usual_justification_n.hyps(4) usual_justification_n.prems(1) usual_justification_n.prems(3))
-    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_fwd r) \<longrightarrow> slashed s n"
+    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_fwd r) \<longrightarrow> slashed s n"
       using surround surround_concrete vote0 vv1 by blast
     then show ?thesis
       using one_third_of_fwd_or_bwd_slashed_def one_third_of_fwd_slashed_def usual_justification_n.prems(6) by blast
@@ -2213,7 +2215,7 @@ next
     then obtain q ch1 where ch1P :"voted_by s q (vset_fwd r) h1 v1 ch1 (v1 + 1)" by blast
     have diff: "e \<noteq> v1"
       using dbl_b by blast
-    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_fwd r) \<longrightarrow> slashed s n"
+    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_fwd r) \<longrightarrow> slashed s n"
       using casper.double_vote casper_axioms ch1P dbl_b vv0' by fastforce
     have sl': "\<exists> q'. one_third_of_fwd_or_bwd_slashed s r q'"
       using one_third_of_fwd_or_bwd_slashed_def one_third_of_fwd_slashed_def sl by blast
@@ -2228,7 +2230,7 @@ next
     have vv1: "\<exists> q ch1. voted_by s q (vset_fwd r) h1 v1 ch1 (v1 + 1)"
       using casper.close_finalization_has_child casper_axioms justified_on_finalization_n.prems(2) justified_on_finalization_n.prems(3) by fastforce
     then obtain q ch1 where ch1P :"voted_by s q (vset_fwd r) h1 v1 ch1 (v1 + 1)" by blast
-    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_fwd r) \<longrightarrow> slashed s n"
+    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_fwd r) \<longrightarrow> slashed s n"
       using ch1P surround surround_concrete vv0' by blast
     have sl' : "\<exists> q. one_third_of_fwd_or_bwd_slashed s r q"
       by (metis casper.one_third_of_fwd_slashed_def casper_axioms one_third_of_fwd_or_bwd_slashed_def sl)
@@ -2320,12 +2322,12 @@ next
     case dbl_a
     have aux: "\<not> justified_with_root new newE newM s h1 v1 m1"
       using justifies_higher leD usual_justification_n.prems(4) by blast
-    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_chosen r) \<longrightarrow> slashed s n"
+    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_chosen r) \<longrightarrow> slashed s n"
       by (metis Mode.simps(1) One_nat_def Suc_eq_plus1 Suc_leI casper.close_finalization_def casper.close_finalizations_cause_slashing_f_chosen casper.close_fj casper.close_involves_vote_f casper.justified_with_root.intros(2) casper.one_switching_involves_root_vote_f casper.really_close_justification_zero casper_axioms dbl_a double_vote justified_switch_really_higher order.strict_iff_order usual_justification_n.hyps(1) usual_justification_n.hyps(3) usual_justification_n.hyps(4) usual_justification_n.hyps(5) usual_justification_n.prems(1) usual_justification_n.prems(2) usual_justification_n.prems(3) usual_justification_n.prems(5) zero_less_one)
     have used: "\<exists> r' rE' a. justified s r' rE' a \<and> vset_fwd r' = vset_chosen r"
       using find_first_change_one justified_switch_really_higher usual_justification_n.hyps(1) usual_justification_n.prems(1) usual_justification_n.prems(3) usual_justification_n.prems(6) by fastforce
     then obtain r' rE' a where jjj: "justified s r' rE' a \<and> vset_fwd r' = vset_chosen r" by blast
-    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_fwd r') \<longrightarrow> slashed s n"
+    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_fwd r') \<longrightarrow> slashed s n"
       by (simp add: jjj sl)
     then have "\<exists> q. one_third_of_fwd_slashed s r' q"
       by (simp add: one_third_of_fwd_slashed_def)
@@ -2344,12 +2346,12 @@ next
       using dbl_b by auto
     have v1': "   \<exists> q ch1. voted_by s q (vset_chosen r) h1 v1 ch1 newE"
       using eq v1 by blast
-    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_chosen r) \<longrightarrow> slashed s n"
+    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_chosen r) \<longrightarrow> slashed s n"
       using diff double_vote v0 v1' by blast
     have used: "\<exists> r' rE' a. justified s r' rE' a \<and> vset_fwd r' = vset_chosen r"
       using find_first_change_one justified_switch_really_higher usual_justification_n.hyps(1) usual_justification_n.prems(1) usual_justification_n.prems(3) usual_justification_n.prems(6) by fastforce
     then obtain r' rE' a where jjj: "justified s r' rE' a \<and> vset_fwd r' = vset_chosen r" by blast
-    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_fwd r') \<longrightarrow> slashed s n"
+    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_fwd r') \<longrightarrow> slashed s n"
       by (simp add: jjj sl)
     then have "\<exists> q. one_third_of_fwd_slashed s r' q"
       by (simp add: one_third_of_fwd_slashed_def)
@@ -2367,12 +2369,12 @@ next
       by (simp add: surround)
     have eq: "newE > v1 + 1"
       using surround usual_justification_n.prems(4) by auto
-    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_chosen r) \<longrightarrow> slashed s n"
+    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_chosen r) \<longrightarrow> slashed s n"
       by (metis (no_types, lifting) diff discrete double_vote le_antisym linorder_not_less surround_concrete usual_justification_n.prems(4) v0 v1)
     have used: "\<exists> r' rE' a. justified s r' rE' a \<and> vset_fwd r' = vset_chosen r"
       using find_first_change_one justified_switch_really_higher usual_justification_n.hyps(1) usual_justification_n.prems(1) usual_justification_n.prems(3) usual_justification_n.prems(6) by fastforce
     then obtain r' rE' a where jjj: "justified s r' rE' a \<and> vset_fwd r' = vset_chosen r" by blast
-    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_fwd r') \<longrightarrow> slashed s n"
+    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_fwd r') \<longrightarrow> slashed s n"
       by (simp add: jjj sl)
     then have "\<exists> q. one_third_of_fwd_slashed s r' q"
       by (simp add: one_third_of_fwd_slashed_def)
@@ -2406,12 +2408,12 @@ next
       using dbl_b by auto
     have v1': "   \<exists> q ch1. voted_by s q (vset_chosen r) h1 v1 ch1 ee"
       using eq v1 by blast
-    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_chosen r) \<longrightarrow> slashed s n"
+    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_chosen r) \<longrightarrow> slashed s n"
       using diff double_vote v0 v1' by blast
     have used: "\<exists> r' rE' a. justified s r' rE' a \<and> vset_fwd r' = vset_chosen r"
       by (metis Suc_inject casper.justified_with_root.intros(3) casper_axioms justified_on_finalization_n.hyps(1) justified_on_finalization_n.hyps(4) justified_on_finalization_n.prems(1) justified_on_finalization_n.prems(3) justified_on_finalization_n.prems(6) trivial_is_refl0 validator_changing_link_def zero_justification_f)
     then obtain r' rE' a where jjj: "justified s r' rE' a \<and> vset_fwd r' = vset_chosen r" by blast
-    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_fwd r') \<longrightarrow> slashed s n"
+    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_fwd r') \<longrightarrow> slashed s n"
       by (simp add: jjj sl)
     then have "\<exists> q. one_third_of_fwd_slashed s r' q"
       by (simp add: one_third_of_fwd_slashed_def)
@@ -2429,12 +2431,12 @@ next
       by (simp add: surround)
     have eq: "ee > v1 + 1"
       using surround by blast
-    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_chosen r) \<longrightarrow> slashed s n"
+    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_chosen r) \<longrightarrow> slashed s n"
       using surround surround_concrete v0 v1 by blast
     have used: "\<exists> r' rE' a. justified s r' rE' a \<and> vset_fwd r' = vset_chosen r"
       by (metis Suc_inject casper.justified_with_root.intros(3) casper_axioms justified_on_finalization_n.hyps(1) justified_on_finalization_n.hyps(4) justified_on_finalization_n.prems(1) justified_on_finalization_n.prems(3) justified_on_finalization_n.prems(6) trivial_is_refl0 validator_changing_link_def zero_justification_f)
     then obtain r' rE' a where jjj: "justified s r' rE' a \<and> vset_fwd r' = vset_chosen r" by blast
-    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_fwd r') \<longrightarrow> slashed s n"
+    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_fwd r') \<longrightarrow> slashed s n"
       by (simp add: jjj sl)
     then have "\<exists> q. one_third_of_fwd_slashed s r' q"
       by (simp add: one_third_of_fwd_slashed_def)
@@ -2479,7 +2481,7 @@ lemma same_tip:
     vset_bwd orig = vset_chosen r \<Longrightarrow>
     origE = v1 \<Longrightarrow>
     mode = FinalizingChild \<Longrightarrow>
-    \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_chosen r) \<longrightarrow> slashed s n"
+    \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_chosen r) \<longrightarrow> slashed s n"
 proof -
   assume a0: "justified_with_root_with_n_switchings n r rE mode s orig origE origM"
   then have j0: "justified_with_root r rE mode s orig origE origM"
@@ -2568,12 +2570,12 @@ next
       using casper.justified_with_root.intros(2) casper_axioms usual_justification_n.hyps(3) usual_justification_n.hyps(4) usual_justification_n.hyps(5) usual_justification_n.prems(5) by fastforce
     have sets: "vset_bwd orig = vset_chosen r"
       by (metis casper.usual_link_def casper_axioms usual_justification_n.hyps(4) usual_justification_n.prems(7))
-    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_chosen r) \<longrightarrow> slashed s n"
+    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_chosen r) \<longrightarrow> slashed s n"
       using casper.usual_justification casper_axioms dblA same_tip sets usual_justification_n.hyps(1) usual_justification_n.hyps(3) usual_justification_n.hyps(4) usual_justification_n.hyps(5) usual_justification_n.prems(2) usual_justification_n.prems(3) usual_justification_n.prems(5) by fastforce
     have used: "\<exists> r' rE' a. justified s r' rE' a \<and> vset_fwd r' = vset_chosen r"
       by (smt One_nat_def Suc_eq_plus1 find_first_change_two justified_switch_really_higher numeral_2_eq_2 usual_justification_n.hyps(1) usual_justification_n.prems(1) usual_justification_n.prems(3) usual_justification_n.prems(6) zero_less_two)
     then obtain r' rE' a where jjj: "justified s r' rE' a \<and> vset_fwd r' = vset_chosen r" by blast
-    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_fwd r') \<longrightarrow> slashed s n"
+    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_fwd r') \<longrightarrow> slashed s n"
       by (simp add: jjj sl)
     then have "\<exists> q. one_third_of_fwd_slashed s r' q"
       by (simp add: one_third_of_fwd_slashed_def)
@@ -2592,12 +2594,12 @@ next
       using dblB by auto
     have v1': "   \<exists> q ch1. voted_by s q (vset_chosen r) h1 v1 ch1 newE"
       using eq v1 by blast
-    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_chosen r) \<longrightarrow> slashed s n"
+    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_chosen r) \<longrightarrow> slashed s n"
       using diff double_vote v0 v1' by blast
     have used: "\<exists> r' rE' a. justified s r' rE' a \<and> vset_fwd r' = vset_chosen r"
       by (smt One_nat_def Suc_eq_plus1 find_first_change_two justified_switch_really_higher numeral_2_eq_2 usual_justification_n.hyps(1) usual_justification_n.prems(1) usual_justification_n.prems(3) usual_justification_n.prems(6) zero_less_two)
     then obtain r' rE' a where jjj: "justified s r' rE' a \<and> vset_fwd r' = vset_chosen r" by blast
-    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_fwd r') \<longrightarrow> slashed s n"
+    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_fwd r') \<longrightarrow> slashed s n"
       by (simp add: jjj sl)
     then have "\<exists> q. one_third_of_fwd_slashed s r' q"
       by (simp add: one_third_of_fwd_slashed_def)
@@ -2615,12 +2617,12 @@ next
       by (simp add: surround)
     have eq: "newE > v1 + 1"
       using surround usual_justification_n.prems(4) by auto
-    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_chosen r) \<longrightarrow> slashed s n"
+    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_chosen r) \<longrightarrow> slashed s n"
       by (metis (no_types, lifting) diff discrete double_vote le_antisym linorder_not_less surround_concrete usual_justification_n.prems(4) v0 v1)
     have used: "\<exists> r' rE' a. justified s r' rE' a \<and> vset_fwd r' = vset_chosen r"
       by (smt One_nat_def Suc_eq_plus1 find_first_change_two justified_switch_really_higher numeral_2_eq_2 usual_justification_n.hyps(1) usual_justification_n.prems(1) usual_justification_n.prems(3) usual_justification_n.prems(6) zero_less_two)
     then obtain r' rE' a where jjj: "justified s r' rE' a \<and> vset_fwd r' = vset_chosen r" by blast
-    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_fwd r') \<longrightarrow> slashed s n"
+    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_fwd r') \<longrightarrow> slashed s n"
       by (simp add: jjj sl)
     then have "\<exists> q. one_third_of_fwd_slashed s r' q"
       by (simp add: one_third_of_fwd_slashed_def)
@@ -2649,12 +2651,12 @@ next
       using casper.justified_with_root.intros(3) casper_axioms justified_on_finalization_n.hyps(3) justified_on_finalization_n.hyps(4) justified_on_finalization_n.hyps(5) justified_on_finalization_n.prems(5) by fastforce
     have sets: "vset_fwd c = vset_chosen r"
       by (metis casper.validator_changing_link_def casper_axioms justified_on_finalization_n.hyps(4) justified_on_finalization_n.prems(7))
-    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_chosen r) \<longrightarrow> slashed s n"
+    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_chosen r) \<longrightarrow> slashed s n"
       by (smt casper.close_finalizations_cause_slashing_f_chosen casper.close_fj casper.close_involves_vote_f casper.forget_n_switchings casper.justified_on_finalization casper.trivial_is_refl casper_axioms dbl_a double_vote justified_is_voted justified_on_finalization_n.hyps(1) justified_on_finalization_n.hyps(3) justified_on_finalization_n.hyps(4) justified_on_finalization_n.hyps(5) justified_on_finalization_n.prems(2) justified_on_finalization_n.prems(3) justified_on_finalization_n.prems(5) sets)
     have used: "\<exists> r' rE' a. justified s r' rE' a \<and> vset_fwd r' = vset_chosen r"
       using find_first_change_one justified_on_finalization_n.hyps(1) justified_on_finalization_n.prems(1) justified_on_finalization_n.prems(3) justified_on_finalization_n.prems(6) justified_switch_really_higher by fastforce
     then obtain r' rE' a where jjj: "justified s r' rE' a \<and> vset_fwd r' = vset_chosen r" by blast
-    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_fwd r') \<longrightarrow> slashed s n"
+    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_fwd r') \<longrightarrow> slashed s n"
       by (simp add: jjj sl)
     then have "\<exists> q. one_third_of_fwd_slashed s r' q"
       by (simp add: one_third_of_fwd_slashed_def)
@@ -2673,12 +2675,12 @@ next
       using dbl_b by auto
     have v1': "   \<exists> q ch1. voted_by s q (vset_chosen r) h1 v1 ch1 ee"
       using eq v1 by blast
-    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_chosen r) \<longrightarrow> slashed s n"
+    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_chosen r) \<longrightarrow> slashed s n"
       using diff double_vote v0 v1' by blast
     have used: "\<exists> r' rE' a. justified s r' rE' a \<and> vset_fwd r' = vset_chosen r"
       using find_first_change_one justified_on_finalization_n.hyps(1) justified_on_finalization_n.prems(1) justified_on_finalization_n.prems(3) justified_on_finalization_n.prems(6) justified_switch_really_higher by fastforce
     then obtain r' rE' a where jjj: "justified s r' rE' a \<and> vset_fwd r' = vset_chosen r" by blast
-    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_fwd r') \<longrightarrow> slashed s n"
+    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_fwd r') \<longrightarrow> slashed s n"
       by (simp add: jjj sl)
     then have "\<exists> q. one_third_of_fwd_slashed s r' q"
       by (simp add: one_third_of_fwd_slashed_def)
@@ -2696,12 +2698,12 @@ next
       by (simp add: surround)
     have eq: "ee > v1 + 1"
       using surround by blast
-    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_chosen r) \<longrightarrow> slashed s n"
+    have sl: "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_chosen r) \<longrightarrow> slashed s n"
       using surround surround_concrete v0 v1 by blast
     have used: "\<exists> r' rE' a. justified s r' rE' a \<and> vset_fwd r' = vset_chosen r"
       using find_first_change_one justified_on_finalization_n.hyps(1) justified_on_finalization_n.prems(1) justified_on_finalization_n.prems(3) justified_on_finalization_n.prems(6) justified_switch_really_higher by fastforce
     then obtain r' rE' a where jjj: "justified s r' rE' a \<and> vset_fwd r' = vset_chosen r" by blast
-    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>2 q of vset_fwd r') \<longrightarrow> slashed s n"
+    have sl'': "   \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset_fwd r') \<longrightarrow> slashed s n"
       by (simp add: jjj sl)
     then have "\<exists> q. one_third_of_fwd_slashed s r' q"
       by (simp add: one_third_of_fwd_slashed_def)
