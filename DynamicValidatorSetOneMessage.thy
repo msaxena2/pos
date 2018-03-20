@@ -31,7 +31,7 @@ the validators and quorum of cardinality greater than 1/3 of the validators."
     and member_2 :: "'n \<Rightarrow> 'q2 \<Rightarrow> 'v \<Rightarrow> bool" ("_ \<in>\<^sub>2 _ of _" 50)
     -- "Membership in 1/3 set"
   fixes
-    hash_parent :: "'h \<Rightarrow> 'h \<Rightarrow> bool" (infix "\<leftarrow>" 50)
+    hash_parent :: "'h \<Rightarrow> 'h \<Rightarrow> bool" (infix "\<leftarrow>" 50) (* parent <- child *)
   fixes
     genesis :: 'h
   fixes
