@@ -166,8 +166,9 @@ definition one_third_of_fwd_or_bwd_slashed where
 "one_third_of_fwd_or_bwd_slashed s h q \<equiv>
    one_third_of_fwd_slashed s h q \<or> one_third_of_bwd_slashed s h q"
 
+(**** On your first read, JUMP to "intermediate stuff ends" at the end of this file. ****)
+(**** intermediate stuff starts ****)
 
-(**** intermediate stuff ends ****)
 
 inductive justified_with_root_with_n_switchings where
   justified_genesis_n: "r = r' \<Longrightarrow> rE = rE' \<Longrightarrow> mode = mode' \<Longrightarrow>
