@@ -67,23 +67,24 @@ inductive nth_parent where
 | Sth_parent: "nth_parent n oldest mid \<Longrightarrow> mid \<leftarrow> newest \<Longrightarrow> nth_parent (Suc n) oldest newest"
 
 definition voted_by where
-  "voted_by s q vset orig v2 h v1 \<equiv>
-     v1 \<noteq> 0 \<and> v2 < v1 \<and> nth_parent (v1 - v2) orig h \<and>
-     (\<forall> n. (n \<in>\<^sub>2 q of vset) \<longrightarrow> vote_msg s n h v1 v2)"
+  "voted_by s q vset orig epoch2 h epoch1 \<equiv>
+     epoch1 \<noteq> 0 \<and> epoch2 < epoch1 \<and> nth_parent (epoch1 - epoch2) orig h \<and>
+     (\<forall> n. (n \<in>\<^sub>2 q of vset) \<longrightarrow> vote_msg s n h epoch1 epoch2)"
 
 (* the forward set and the backward set must be taken from orig, not from h.
  * Otherwise, there is a forking situation.
  *)
 definition voted_by_fwd where
-  "voted_by_fwd s q orig v2 h v1 \<equiv>
-     voted_by s q (vset_fwd h) orig v2 h v1"
+  "voted_by_fwd s q orig epoch2 h epoch1 \<equiv>
+     voted_by s q (vset_fwd h) orig epoch2 h epoch1"
 
 definition voted_by_bwd where
-  "voted_by_bwd s q orig v2 h v1 \<equiv>
-     voted_by s q (vset_bwd h) orig v2 h v1"
+  "voted_by_bwd s q orig epoch2 h epoch1 \<equiv>
+     voted_by s q (vset_bwd h) orig epoch2 h epoch1"
 
 definition voted_by_both where
-  "voted_by_both s q0 q1 orig v2 h v1 \<equiv> voted_by_fwd s q0 orig v2 h v1 \<and> voted_by_bwd s q1 orig v2 h v1"
+  "voted_by_both s q0 q1 orig epoch2 h epoch1 \<equiv> voted_by_fwd s q0 orig epoch2 h epoch1
+      \<and> voted_by_bwd s q1 orig epoch2 h epoch1"
 
 inductive hash_ancestor (infix "\<leftarrow>\<^sup>*" 50) where
   "h1 \<leftarrow> h2 \<Longrightarrow> h1 \<leftarrow>\<^sup>* h2"
@@ -134,18 +135,19 @@ abbreviation justified where
   "justified s h v m \<equiv> justified_with_root genesis 0 Usual s h v m"
 
 definition fork where
-  "fork s h0 v0 m0 h1 v1 m1 \<equiv> \<exists> child0 child1.
-    (finalized_with_root genesis 0 Usual s h0 child0 v0 m0 \<and> finalized_with_root genesis 0 Usual s h1 child1 v1 m1 \<and>
+  "fork s h0 epoch0 m0 h1 epoch1 m1 \<equiv> \<exists> child0 child1.
+    (finalized_with_root genesis 0 Usual s h0 child0 epoch0 m0
+    \<and> finalized_with_root genesis 0 Usual s h1 child1 epoch1 m1 \<and>
      \<not>(h1 \<leftarrow>\<^sup>* h0 \<or> h0 \<leftarrow>\<^sup>* h1 \<or> h0 = h1))"
 
 definition slashed_dbl where "slashed_dbl s n \<equiv>
-  \<exists> h0 h1 v v0 v1. (h0 \<noteq> h1 \<or> v0 \<noteq> v1) \<and> vote_msg s n h0 v v0 \<and> vote_msg s n h1 v v1" (* not v, maybe e for epoch *)
+  \<exists> h0 h1 epoch epoch0 epoch1. (h0 \<noteq> h1 \<or> epoch0 \<noteq> epoch1) \<and> vote_msg s n h0 epoch epoch0 \<and> vote_msg s n h1 epoch epoch1" (* not v, maybe e for epoch *)
 (* source difference needs to be punished as well, for
  * https://ethresear.ch/t/casper-ffg-with-one-message-type-and-simpler-fork-choice-rule/103/41?u=yhirai *)
 
 definition slashed_surround where "slashed_surround s n \<equiv>
-  \<exists> h0 h1 v0 v1 vs0 vs1. vs0 < vs1 \<and> vs1 < v1 \<and> v1 < v0
-          \<and> vote_msg s n h0 v0 vs0 \<and> vote_msg s n h1 v1 vs1"
+  \<exists> h0 h1 epoch0 epoch1 vs0 vs1. vs0 < vs1 \<and> vs1 < epoch1 \<and> epoch1 < epoch0
+          \<and> vote_msg s n h0 epoch0 vs0 \<and> vote_msg s n h1 epoch1 vs1"
 
 definition slashed where "slashed s n \<equiv> 
   slashed_dbl s n \<or> slashed_surround s n"
@@ -202,18 +204,18 @@ next
 qed
 
 lemma voted_by_higher:
-  "voted_by s q vset orig v2 h v1 \<Longrightarrow>
-   v2 < v1"
+  "voted_by s q vset orig epoch2 h epoch1 \<Longrightarrow>
+   epoch2 < epoch1"
   by (simp add: voted_by_def)
 
 lemma voted_by_fwd_higher:
-  "voted_by_fwd s q orig v2 h v1 \<Longrightarrow>
-   v2 < v1"
+  "voted_by_fwd s q orig epoch2 h epoch1 \<Longrightarrow>
+   epoch2 < epoch1"
   by (simp add: voted_by_fwd_def voted_by_higher)
 
 lemma voted_by_both_higher:
-  "voted_by_both s q0 q1 orig v2 h v1 \<Longrightarrow>
-   v2 < v1"
+  "voted_by_both s q0 q1 orig epoch2 h epoch1 \<Longrightarrow>
+   epoch2 < epoch1"
   using voted_by_both_def voted_by_fwd_higher by blast
 
 lemma usual_link_higher:
@@ -227,13 +229,13 @@ lemma validator_changing_link_higher:
   using validator_changing_link_def voted_by_both_higher by blast
 
 lemma voted_by_fwd_means_ancestor :
-  "voted_by_fwd s q orig v2 h v1 \<Longrightarrow>
-   nth_parent (v1 - v2) orig h"
+  "voted_by_fwd s q orig epoch2 h epoch1 \<Longrightarrow>
+   nth_parent (epoch1 - epoch2) orig h"
   by (simp add: voted_by_def voted_by_fwd_def)
 
 lemma voted_by_both_means_ancestor:
-  "voted_by_both s q0 q1 orig v2 h v1 \<Longrightarrow>
-  nth_parent (v1 - v2) orig h"
+  "voted_by_both s q0 q1 orig epoch2 h epoch1 \<Longrightarrow>
+  nth_parent (epoch1 - epoch2) orig h"
   using voted_by_both_def voted_by_fwd_means_ancestor by blast
 
 lemma validator_changing_link_means_ancestor:
@@ -242,8 +244,8 @@ lemma validator_changing_link_means_ancestor:
   using validator_changing_link_def voted_by_both_means_ancestor by blast
 
 lemma justifies_higher:
-  "justified_with_root r rE rM s h v m \<Longrightarrow>
-   rE \<le> v"
+  "justified_with_root r rE rM s h epoch m \<Longrightarrow>
+   rE \<le> epoch"
 proof(induct rule: justified_with_root.induct)
   case (justified_genesis r rE s)
   then show ?case by simp
@@ -258,13 +260,13 @@ next
 qed
 
 lemma justified_with_root_refl:
-  "justified_with_root h v m s h v m"
+  "justified_with_root h epoch m s h epoch m"
   by (simp add: justified_genesis)
 
 lemma justified_with_root_trans:
-   "justified_with_root h1 v1 m1 s h2 v2 m2 \<Longrightarrow>
-    justified_with_root h0 v0 m0 s h1 v1 m1 \<Longrightarrow>
-    justified_with_root h0 v0 m0 s h2 v2 m2"
+   "justified_with_root h1 epoch1 m1 s h2 epoch2 m2 \<Longrightarrow>
+    justified_with_root h0 epoch0 m0 s h1 epoch1 m1 \<Longrightarrow>
+    justified_with_root h0 epoch0 m0 s h2 epoch2 m2"
 proof(induct rule: justified_with_root.inducts)
   case (justified_genesis r r' rE rE' s)
   then show ?case by blast
@@ -290,8 +292,8 @@ inductive finalized_with_root_with_n_switchings where
      finalized_with_root_with_n_switchings n r rE mode s c h e FinalizingChild"
 
 lemma fjn:
-  "finalized_with_root_with_n_switchings n r rE rM s h child v m \<Longrightarrow>
-   justified_with_root_with_n_switchings n r rE rM s h v m"
+  "finalized_with_root_with_n_switchings n r rE rM s h child epoch m \<Longrightarrow>
+   justified_with_root_with_n_switchings n r rE rM s h epoch m"
 proof(induct rule: finalized_with_root_with_n_switchings.induct)
   case (under_usual_link_n n r rE mode s orig origE q0 q1 new)
   then show ?case
@@ -320,10 +322,10 @@ next
 qed
 
 lemma zero_justification_f:
-  "justified_with_root_with_n_switchings n r rE rM s h v m \<Longrightarrow>
+  "justified_with_root_with_n_switchings n r rE rM s h epoch m \<Longrightarrow>
    n = 0 \<Longrightarrow>
    rM = FinalizingChild \<Longrightarrow>
-   rE = v"
+   rE = epoch"
 proof(induct rule: justified_with_root_with_n_switchings.induct)
   case (justified_genesis_n r r' rE rE' mode mode' n s)
   then show ?case by blast
@@ -339,41 +341,41 @@ qed
 
 
 definition close_finalization where
-  "close_finalization s r rE rM h v m \<equiv>
-  (rE + 1 < v \<longrightarrow> m = Usual) \<and>
+  "close_finalization s r rE rM h epoch m \<equiv>
+  (rE + 1 < epoch \<longrightarrow> m = Usual) \<and>
    ((\<exists> child.
-    finalized_with_root_with_n_switchings (0 :: nat) r rE rM s h child v m) \<or>
-  (\<exists> child. finalized_with_root_with_n_switchings (1 :: nat) r rE rM s h child v m) \<and> rE < v \<and> (rE + 1 = v \<longrightarrow> vset_fwd h = vset_chosen r \<and> rM = FinalizingChild) \<or>
-  (\<exists> child. finalized_with_root_with_n_switchings (2 :: nat) r rE rM s h child v m) \<and> rE + 1 < v \<and> vset_bwd h = vset_chosen r \<and> rM = FinalizingChild)"
+    finalized_with_root_with_n_switchings (0 :: nat) r rE rM s h child epoch m) \<or>
+  (\<exists> child. finalized_with_root_with_n_switchings (1 :: nat) r rE rM s h child epoch m) \<and> rE < epoch \<and> (rE + 1 = epoch \<longrightarrow> vset_fwd h = vset_chosen r \<and> rM = FinalizingChild) \<or>
+  (\<exists> child. finalized_with_root_with_n_switchings (2 :: nat) r rE rM s h child epoch m) \<and> rE + 1 < epoch \<and> vset_bwd h = vset_chosen r \<and> rM = FinalizingChild)"
 
 definition close_justification where
-  "close_justification s r rE rM h v hist \<equiv>
-  (rE + 1 < v \<longrightarrow> hist = Usual) \<and>
-  (justified_with_root_with_n_switchings (0 :: nat) r rE rM s h v hist \<or>
-  justified_with_root_with_n_switchings (1 :: nat) r rE rM s h v hist \<and> rE < v \<and> (rE + 1 = v \<longrightarrow> vset_fwd h = vset_chosen r \<and> rM = FinalizingChild) \<or>
-  justified_with_root_with_n_switchings (2 :: nat) r rE rM s h v hist \<and> rE + 1 < v \<and> vset_bwd h = vset_chosen r \<and> rM = FinalizingChild)"
+  "close_justification s r rE rM h epoch hist \<equiv>
+  (rE + 1 < epoch \<longrightarrow> hist = Usual) \<and>
+  (justified_with_root_with_n_switchings (0 :: nat) r rE rM s h epoch hist \<or>
+  justified_with_root_with_n_switchings (1 :: nat) r rE rM s h epoch hist \<and> rE < epoch \<and> (rE + 1 = epoch \<longrightarrow> vset_fwd h = vset_chosen r \<and> rM = FinalizingChild) \<or>
+  justified_with_root_with_n_switchings (2 :: nat) r rE rM s h epoch hist \<and> rE + 1 < epoch \<and> vset_bwd h = vset_chosen r \<and> rM = FinalizingChild)"
 
 definition justification_fork_with_root where
-  "justification_fork_with_root s r rE rM h0 v0 m0 h1 v1 m1 \<equiv>
+  "justification_fork_with_root s r rE rM h0 epoch0 m0 h1 epoch1 m1 \<equiv>
      justified s r rE rM \<and>
      (\<exists> child0 child1.
-       finalized_with_root r rE rM s h0 child0 v0 m0 \<and> finalized_with_root r rE rM s h1 child1 v1 m1) \<and>
-    \<not>(justified_with_root h1 v1 m1 s h0 v0 m0 \<or> justified_with_root h0 v0 m0 s h1 v1 m1)"
+       finalized_with_root r rE rM s h0 child0 epoch0 m0 \<and> finalized_with_root r rE rM s h1 child1 epoch1 m1) \<and>
+    \<not>(justified_with_root h1 epoch1 m1 s h0 epoch0 m0 \<or> justified_with_root h0 epoch0 m0 s h1 epoch1 m1)"
 
 lemma justification_fork_with_root_sym :
-  "justification_fork_with_root s r rE rM h0 v0 m0 h1 v1 m1 =
-   justification_fork_with_root s r rE rM h1 v1 m1 h0 v0 m0"
+  "justification_fork_with_root s r rE rM h0 epoch0 m0 h1 epoch1 m1 =
+   justification_fork_with_root s r rE rM h1 epoch1 m1 h0 epoch0 m0"
   by (meson justification_fork_with_root_def)
 
 definition small_fork where
-  "small_fork s hr vr mr h0 v0 m0 h1 v1 m1 \<equiv>
-    justification_fork_with_root s hr vr mr h0 v0 m0 h1 v1 m1 \<and>
-    (\<forall> hr' vr' mr' h0' v0' m0' h1' v1' m1'.
-       v0' + v1' - vr' < v0 + v1 - vr \<longrightarrow>
-       \<not> justification_fork_with_root s hr' vr' mr' h0' v0' m0' h1' v1' m1')"
+  "small_fork s hr epochr mr h0 epoch0 m0 h1 epoch1 m1 \<equiv>
+    justification_fork_with_root s hr epochr mr h0 epoch0 m0 h1 epoch1 m1 \<and>
+    (\<forall> hr' epochr' mr' h0' epoch0' m0' h1' epoch1' m1'.
+       epoch0' + epoch1' - epochr' < epoch0 + epoch1 - epochr \<longrightarrow>
+       \<not> justification_fork_with_root s hr' epochr' mr' h0' epoch0' m0' h1' epoch1' m1')"
 
 lemma small_fork_sym :
-  "small_fork s hr vr mr h0 v0 m0 h1 v1 m1 = small_fork s hr vr mr h1 v1 m1 h0 v0 m0"
+  "small_fork s hr epochr mr h0 epoch0 m0 h1 epoch1 m1 = small_fork s hr epochr mr h1 epoch1 m1 h0 epoch0 m0"
   by (simp add: add.commute justification_fork_with_root_sym small_fork_def)
 
 lemma close_justification_refl:
@@ -511,10 +513,10 @@ lemma when_close_justification_is_finalized :
   by (simp add: when_close_justification_is_finalized_f)
 
 lemma jff:
-   "finalized_with_root r rE rM s h0 child0 v0 m0 \<Longrightarrow>
+   "finalized_with_root r rE rM s h0 child0 epoch0 m0 \<Longrightarrow>
     justified s r rE rM \<Longrightarrow>
-    justified_with_root h0' v0' m0' s h0 v0 m0 \<Longrightarrow>
-    finalized_with_root h0' v0' m0' s h0 child0 v0 m0"
+    justified_with_root h0' epoch0' m0' s h0 epoch0 m0 \<Longrightarrow>
+    finalized_with_root h0' epoch0' m0' s h0 child0 epoch0 m0"
 proof(induct rule: finalized_with_root.induct)
   case (under_usual_link r rE mode s orig origE q0 q1 new)
   then show ?case
@@ -527,77 +529,77 @@ qed
 
 lemma small_fork_with_middle_means_without_link:
  "justified s r rE rM \<Longrightarrow>
-  finalized_with_root r rE rM s h0 child0 v0 m0 \<Longrightarrow>
-  finalized_with_root r rE rM s h1 child1 v1 m1 \<Longrightarrow>
-  \<not> justified_with_root h1 v1 m1 s h0 v0 m0 \<Longrightarrow> \<not> justified_with_root h0 v0 m0 s h1 v1 m1 \<Longrightarrow>
-  rE \<noteq> v0' \<Longrightarrow> v0' \<noteq> v0 \<Longrightarrow>
-  justified_with_root r rE rM s h0' v0' m0' \<Longrightarrow>
-  justified_with_root h0' v0' m0' s h0 v0 m0 \<Longrightarrow> finalized_with_root r rE rM s h0' c0' v0' m0' \<Longrightarrow>
-  \<not> justified_with_root h0' v0' m0' s h1 v1 m1 \<Longrightarrow>
-  justification_fork_with_root s r rE rM h0' v0' m0' h1 v1 m1"
+  finalized_with_root r rE rM s h0 child0 epoch0 m0 \<Longrightarrow>
+  finalized_with_root r rE rM s h1 child1 epoch1 m1 \<Longrightarrow>
+  \<not> justified_with_root h1 epoch1 m1 s h0 epoch0 m0 \<Longrightarrow> \<not> justified_with_root h0 epoch0 m0 s h1 epoch1 m1 \<Longrightarrow>
+  rE \<noteq> epoch0' \<Longrightarrow> epoch0' \<noteq> epoch0 \<Longrightarrow>
+  justified_with_root r rE rM s h0' epoch0' m0' \<Longrightarrow>
+  justified_with_root h0' epoch0' m0' s h0 epoch0 m0 \<Longrightarrow> finalized_with_root r rE rM s h0' c0' epoch0' m0' \<Longrightarrow>
+  \<not> justified_with_root h0' epoch0' m0' s h1 epoch1 m1 \<Longrightarrow>
+  justification_fork_with_root s r rE rM h0' epoch0' m0' h1 epoch1 m1"
   using justification_fork_with_root_def justified_with_root_trans by blast
 
 lemma small_fork_with_middle_means_with_link:
  "justified s r rE rM \<Longrightarrow>
-  finalized_with_root r rE rM s h0 child0 v0 m0 \<Longrightarrow>
-  finalized_with_root r rE rM s h1 child1 v1 m1 \<Longrightarrow>
-  \<not> justified_with_root h1 v1 m1 s h0 v0 m0 \<Longrightarrow> \<not> justified_with_root h0 v0 m0 s h1 v1 m1 \<Longrightarrow>
-  rE \<noteq> v0' \<Longrightarrow> v0' \<noteq> v0 \<Longrightarrow>
-  justified_with_root r rE rM s h0' v0' m0' \<Longrightarrow>
-  justified_with_root h0' v0' m0' s h0 v0 m0 \<Longrightarrow> finalized_with_root r rE rM s h0' c0' v0' m0' \<Longrightarrow>
-  justified_with_root h0' v0' m0' s h1 v1 m1 \<Longrightarrow>
-  justification_fork_with_root s h0' v0' m0' h0 v0 m0 h1 v1 m1"
+  finalized_with_root r rE rM s h0 child0 epoch0 m0 \<Longrightarrow>
+  finalized_with_root r rE rM s h1 child1 epoch1 m1 \<Longrightarrow>
+  \<not> justified_with_root h1 epoch1 m1 s h0 epoch0 m0 \<Longrightarrow> \<not> justified_with_root h0 epoch0 m0 s h1 epoch1 m1 \<Longrightarrow>
+  rE \<noteq> epoch0' \<Longrightarrow> epoch0' \<noteq> epoch0 \<Longrightarrow>
+  justified_with_root r rE rM s h0' epoch0' m0' \<Longrightarrow>
+  justified_with_root h0' epoch0' m0' s h0 epoch0 m0 \<Longrightarrow> finalized_with_root r rE rM s h0' c0' epoch0' m0' \<Longrightarrow>
+  justified_with_root h0' epoch0' m0' s h1 epoch1 m1 \<Longrightarrow>
+  justification_fork_with_root s h0' epoch0' m0' h0 epoch0 m0 h1 epoch1 m1"
   by (meson jff justification_fork_with_root_def justified_with_root_trans)
 
 lemma small_fork_with_middle_means:
  "justified s r rE rM \<Longrightarrow>
-  finalized_with_root r rE rM s h0 child0 v0 m0 \<Longrightarrow>
-  finalized_with_root r rE rM s h1 child1 v1 m1 \<Longrightarrow>
-  \<not> justified_with_root h1 v1 m1 s h0 v0 m0 \<Longrightarrow> \<not> justified_with_root h0 v0 m0 s h1 v1 m1 \<Longrightarrow>
-  rE \<noteq> v0' \<Longrightarrow> v0' \<noteq> v0 \<Longrightarrow>
-  justified_with_root r rE rM s h0' v0' m0' \<Longrightarrow>
-  justified_with_root h0' v0' m0' s h0 v0 m0 \<Longrightarrow> finalized_with_root r rE rM s h0' c0' v0' m0' \<Longrightarrow>
-  justification_fork_with_root s r rE rM h0' v0' m0' h1 v1 m1 \<or>
-  justification_fork_with_root s h0' v0' m0' h0 v0 m0 h1 v1 m1"
+  finalized_with_root r rE rM s h0 child0 epoch0 m0 \<Longrightarrow>
+  finalized_with_root r rE rM s h1 child1 epoch1 m1 \<Longrightarrow>
+  \<not> justified_with_root h1 epoch1 m1 s h0 epoch0 m0 \<Longrightarrow> \<not> justified_with_root h0 epoch0 m0 s h1 epoch1 m1 \<Longrightarrow>
+  rE \<noteq> epoch0' \<Longrightarrow> epoch0' \<noteq> epoch0 \<Longrightarrow>
+  justified_with_root r rE rM s h0' epoch0' m0' \<Longrightarrow>
+  justified_with_root h0' epoch0' m0' s h0 epoch0 m0 \<Longrightarrow> finalized_with_root r rE rM s h0' c0' epoch0' m0' \<Longrightarrow>
+  justification_fork_with_root s r rE rM h0' epoch0' m0' h1 epoch1 m1 \<or>
+  justification_fork_with_root s h0' epoch0' m0' h0 epoch0 m0 h1 epoch1 m1"
   by (meson small_fork_with_middle_means_with_link small_fork_with_middle_means_without_link)
 
 lemma small_fork_has_no_middle_fin:
  "justified s r rE rM \<Longrightarrow>
-  finalized_with_root r rE rM s h0 child0 v0 m0 \<Longrightarrow>
-  finalized_with_root r rE rM s h1 child1 v1 m1 \<Longrightarrow>
-  \<not> justified_with_root h1 v1 m1 s h0 v0 m0 \<Longrightarrow> \<not> justified_with_root h0 v0 m0 s h1 v1 m1 \<Longrightarrow>
-  \<forall>r' rE' rM' h0' v0' m0' h1' v1' m1'.
-      v0' + v1' - rE' < v0 + v1 - rE \<longrightarrow> \<not> justification_fork_with_root s r' rE' rM' h0' v0' m0' h1' v1' m1' \<Longrightarrow>
-  rE \<noteq> v0' \<Longrightarrow> v0' \<noteq> v0 \<Longrightarrow>
-  justified_with_root r rE rM s h0' v0' m0' \<Longrightarrow>
-  justified_with_root h0' v0' m0' s h0 v0 m0 \<Longrightarrow> finalized_with_root r rE rM s h0' c0' v0' m0' \<Longrightarrow> False"
+  finalized_with_root r rE rM s h0 child0 epoch0 m0 \<Longrightarrow>
+  finalized_with_root r rE rM s h1 child1 epoch1 m1 \<Longrightarrow>
+  \<not> justified_with_root h1 epoch1 m1 s h0 epoch0 m0 \<Longrightarrow> \<not> justified_with_root h0 epoch0 m0 s h1 epoch1 m1 \<Longrightarrow>
+  \<forall>r' rE' rM' h0' epoch0' m0' h1' epoch1' m1'.
+      epoch0' + epoch1' - rE' < epoch0 + epoch1 - rE \<longrightarrow> \<not> justification_fork_with_root s r' rE' rM' h0' epoch0' m0' h1' epoch1' m1' \<Longrightarrow>
+  rE \<noteq> epoch0' \<Longrightarrow> epoch0' \<noteq> epoch0 \<Longrightarrow>
+  justified_with_root r rE rM s h0' epoch0' m0' \<Longrightarrow>
+  justified_with_root h0' epoch0' m0' s h0 epoch0 m0 \<Longrightarrow> finalized_with_root r rE rM s h0' c0' epoch0' m0' \<Longrightarrow> False"
 proof -
   assume j: "justified s r rE rM"
-  assume f0: "finalized_with_root r rE rM s h0 child0 v0 m0"
-  assume f1: "finalized_with_root r rE rM s h1 child1 v1 m1"
-  assume j10: "\<not> justified_with_root h1 v1 m1 s h0 v0 m0"
-  assume j01: "\<not> justified_with_root h0 v0 m0 s h1 v1 m1"
-  assume rv: "rE \<noteq> v0'"
-  assume vv: "v0' \<noteq> v0"
-  assume lower: "justified_with_root r rE rM s h0' v0' m0'"
-  assume higher: "justified_with_root h0' v0' m0' s h0 v0 m0"
-  assume mid_f: "finalized_with_root r rE rM s h0' c0' v0' m0'"
-  assume no_mid: "  \<forall>r' rE' rM' h0' v0' m0' h1' v1' m1'.
-     v0' + v1' - rE' < v0 + v1 - rE \<longrightarrow> \<not> justification_fork_with_root s r' rE' rM' h0' v0' m0' h1' v1' m1'"
+  assume f0: "finalized_with_root r rE rM s h0 child0 epoch0 m0"
+  assume f1: "finalized_with_root r rE rM s h1 child1 epoch1 m1"
+  assume j10: "\<not> justified_with_root h1 epoch1 m1 s h0 epoch0 m0"
+  assume j01: "\<not> justified_with_root h0 epoch0 m0 s h1 epoch1 m1"
+  assume rv: "rE \<noteq> epoch0'"
+  assume vv: "epoch0' \<noteq> epoch0"
+  assume lower: "justified_with_root r rE rM s h0' epoch0' m0'"
+  assume higher: "justified_with_root h0' epoch0' m0' s h0 epoch0 m0"
+  assume mid_f: "finalized_with_root r rE rM s h0' c0' epoch0' m0'"
+  assume no_mid: "  \<forall>r' rE' rM' h0' epoch0' m0' h1' epoch1' m1'.
+     epoch0' + epoch1' - rE' < epoch0 + epoch1 - rE \<longrightarrow> \<not> justification_fork_with_root s r' rE' rM' h0' epoch0' m0' h1' epoch1' m1'"
   consider
-    (a) "justification_fork_with_root s r rE rM h0' v0' m0' h1 v1 m1" |
-    (b) "justification_fork_with_root s h0' v0' m0' h0 v0 m0 h1 v1 m1"
+    (a) "justification_fork_with_root s r rE rM h0' epoch0' m0' h1 epoch1 m1" |
+    (b) "justification_fork_with_root s h0' epoch0' m0' h0 epoch0 m0 h1 epoch1 m1"
     by (meson casper.small_fork_with_middle_means casper_axioms f0 f1 higher j j01 j10 lower mid_f rv vv)
   then show ?thesis
   proof(cases)
     case a
-    then have "v0' + v1 - rE < v0 + v1 - rE"
+    then have "epoch0' + epoch1 - rE < epoch0 + epoch1 - rE"
       by (meson add_strict_right_mono diff_less_mono higher justifies_higher le_neq_implies_less less_le_trans linorder_not_le lower not_add_less1 vv)
     then show ?thesis
       using a no_mid by blast
   next
     case b
-    then have "v0 + v1 - v0' < v0 + v1 - rE"
+    then have "epoch0 + epoch1 - epoch0' < epoch0 + epoch1 - rE"
       by (metis casper.justifies_higher casper_axioms diff_less_mono2 higher le_less_trans le_neq_implies_less lower rv trans_less_add1)
     then show ?thesis
       using b no_mid by blast
@@ -854,7 +856,7 @@ next
   then have "close_justification s r rE mode c e FinalizingChild"
   proof -
     obtain nn :: nat and eea :: 'e and mm :: Mode and eeb :: 'e where
-      "(\<exists>v0 v1 v2 v3. (rE \<noteq> v2 \<and> v2 \<noteq> e \<and> justified_with_root r rE mode s v0 v2 v3 \<and> justified_with_root v0 v2 v3 s c e FinalizingChild) \<and> finalized_with_root r rE mode s v0 v1 v2 v3) = ((rE \<noteq> nn \<and> nn \<noteq> e \<and> justified_with_root r rE mode s eea nn mm \<and> justified_with_root eea nn mm s c e FinalizingChild) \<and> finalized_with_root r rE mode s eea eeb nn mm)"
+      "(\<exists>epoch0 epoch1 epoch2 epoch3. (rE \<noteq> epoch2 \<and> epoch2 \<noteq> e \<and> justified_with_root r rE mode s epoch0 epoch2 epoch3 \<and> justified_with_root epoch0 epoch2 epoch3 s c e FinalizingChild) \<and> finalized_with_root r rE mode s epoch0 epoch1 epoch2 epoch3) = ((rE \<noteq> nn \<and> nn \<noteq> e \<and> justified_with_root r rE mode s eea nn mm \<and> justified_with_root eea nn mm s c e FinalizingChild) \<and> finalized_with_root r rE mode s eea eeb nn mm)"
       by blast
     moreover
     { assume "justified_with_root eea nn mm s h ee (if ee - e = 1 then FinalizingChild else Usual)"
@@ -959,23 +961,23 @@ lemma close_finalization_alt :
 
 lemma close_justification_three:
  "justified s r rE rM \<Longrightarrow>
-    finalized_with_root r rE rM s h0 child0 v0 m0 \<Longrightarrow>
-    finalized_with_root r rE rM s h1 child1 v1 m1 \<Longrightarrow>
-    \<not> justified_with_root h1 v1 m1 s h0 v0 m0 \<Longrightarrow> \<not> justified_with_root h0 v0 m0 s h1 v1 m1 \<Longrightarrow>
-   \<forall>r' rE' rM' h0' v0' m0' h1' v1' m1'.
-      v0' + v1' - rE' < v0 + v1 - rE \<longrightarrow> \<not> justification_fork_with_root s r' rE' rM' h0' v0' m0' h1' v1' m1' \<Longrightarrow>
-   close_finalization s r rE rM h0 v0 m0"
+    finalized_with_root r rE rM s h0 child0 epoch0 m0 \<Longrightarrow>
+    finalized_with_root r rE rM s h1 child1 epoch1 m1 \<Longrightarrow>
+    \<not> justified_with_root h1 epoch1 m1 s h0 epoch0 m0 \<Longrightarrow> \<not> justified_with_root h0 epoch0 m0 s h1 epoch1 m1 \<Longrightarrow>
+   \<forall>r' rE' rM' h0' epoch0' m0' h1' epoch1' m1'.
+      epoch0' + epoch1' - rE' < epoch0 + epoch1 - rE \<longrightarrow> \<not> justification_fork_with_root s r' rE' rM' h0' epoch0' m0' h1' epoch1' m1' \<Longrightarrow>
+   close_finalization s r rE rM h0 epoch0 m0"
 proof -
   assume "justified s r rE rM"
-  moreover assume f0: "finalized_with_root r rE rM s h0 child0 v0 m0"
-  moreover assume "finalized_with_root r rE rM s h1 child1 v1 m1"
-  moreover assume "\<not> justified_with_root h1 v1 m1 s h0 v0 m0"
-  moreover assume "\<not> justified_with_root h0 v0 m0 s h1 v1 m1"
-  moreover assume "\<forall>r' rE' rM' h0' v0' m0' h1' v1' m1'.
-      v0' + v1' - rE' < v0 + v1 - rE \<longrightarrow> \<not> justification_fork_with_root s r' rE' rM' h0' v0' m0' h1' v1' m1'"
-  ultimately have "\<forall> h0' c0' v0' m0'.
-      rE \<noteq> v0' \<longrightarrow> v0' \<noteq> v0 \<longrightarrow> justified_with_root r rE rM s h0' v0' m0' \<longrightarrow> 
-      justified_with_root h0' v0' m0' s h0 v0 m0 \<longrightarrow> \<not> finalized_with_root r rE rM s h0' c0' v0' m0'"
+  moreover assume f0: "finalized_with_root r rE rM s h0 child0 epoch0 m0"
+  moreover assume "finalized_with_root r rE rM s h1 child1 epoch1 m1"
+  moreover assume "\<not> justified_with_root h1 epoch1 m1 s h0 epoch0 m0"
+  moreover assume "\<not> justified_with_root h0 epoch0 m0 s h1 epoch1 m1"
+  moreover assume "\<forall>r' rE' rM' h0' epoch0' m0' h1' epoch1' m1'.
+      epoch0' + epoch1' - rE' < epoch0 + epoch1 - rE \<longrightarrow> \<not> justification_fork_with_root s r' rE' rM' h0' epoch0' m0' h1' epoch1' m1'"
+  ultimately have "\<forall> h0' c0' epoch0' m0'.
+      rE \<noteq> epoch0' \<longrightarrow> epoch0' \<noteq> epoch0 \<longrightarrow> justified_with_root r rE rM s h0' epoch0' m0' \<longrightarrow> 
+      justified_with_root h0' epoch0' m0' s h0 epoch0 m0 \<longrightarrow> \<not> finalized_with_root r rE rM s h0' c0' epoch0' m0'"
     apply(rule_tac allI)
     apply(rule_tac allI)
     apply(rule_tac allI)
@@ -991,39 +993,39 @@ qed
 
 lemma close_justification_two:
  "justified s r rE rM \<Longrightarrow>
-    (\<exists>child0. finalized_with_root r rE rM s h0 child0 v0 m0) \<Longrightarrow>
-    (\<exists>child1. finalized_with_root r rE rM s h1 child1 v1 m1) \<Longrightarrow>
-    \<not> justified_with_root h1 v1 m1 s h0 v0 m0 \<Longrightarrow> \<not> justified_with_root h0 v0 m0 s h1 v1 m1 \<Longrightarrow>
-   \<forall>r' rE' rM' h0' v0' m0' h1' v1' m1'.
-      v0' + v1' - rE' < v0 + v1 - rE \<longrightarrow> \<not> justification_fork_with_root s r' rE' rM' h0' v0' m0' h1' v1' m1' \<Longrightarrow>
-   close_finalization s r rE rM h0 v0 m0"
+    (\<exists>child0. finalized_with_root r rE rM s h0 child0 epoch0 m0) \<Longrightarrow>
+    (\<exists>child1. finalized_with_root r rE rM s h1 child1 epoch1 m1) \<Longrightarrow>
+    \<not> justified_with_root h1 epoch1 m1 s h0 epoch0 m0 \<Longrightarrow> \<not> justified_with_root h0 epoch0 m0 s h1 epoch1 m1 \<Longrightarrow>
+   \<forall>r' rE' rM' h0' epoch0' m0' h1' epoch1' m1'.
+      epoch0' + epoch1' - rE' < epoch0 + epoch1 - rE \<longrightarrow> \<not> justification_fork_with_root s r' rE' rM' h0' epoch0' m0' h1' epoch1' m1' \<Longrightarrow>
+   close_finalization s r rE rM h0 epoch0 m0"
 proof -
   assume j: "justified s r rE rM"
-  assume "\<exists>child0. finalized_with_root r rE rM s h0 child0 v0 m0"
-  then obtain child0 where a0: "finalized_with_root r rE rM s h0 child0 v0 m0" by blast
-  assume "\<exists>child1. finalized_with_root r rE rM s h1 child1 v1 m1"
-  then obtain child1 where a1: "finalized_with_root r rE rM s h1 child1 v1 m1" by blast
-  assume a2: "\<not> justified_with_root h1 v1 m1 s h0 v0 m0"
-  assume a3: "\<not> justified_with_root h0 v0 m0 s h1 v1 m1"
+  assume "\<exists>child0. finalized_with_root r rE rM s h0 child0 epoch0 m0"
+  then obtain child0 where a0: "finalized_with_root r rE rM s h0 child0 epoch0 m0" by blast
+  assume "\<exists>child1. finalized_with_root r rE rM s h1 child1 epoch1 m1"
+  then obtain child1 where a1: "finalized_with_root r rE rM s h1 child1 epoch1 m1" by blast
+  assume a2: "\<not> justified_with_root h1 epoch1 m1 s h0 epoch0 m0"
+  assume a3: "\<not> justified_with_root h0 epoch0 m0 s h1 epoch1 m1"
   assume a4: "
-   \<forall>r' rE' rM' h0' v0' m0' h1' v1' m1'.
-      v0' + v1' - rE' < v0 + v1 - rE \<longrightarrow> \<not> justification_fork_with_root s r' rE' rM' h0' v0' m0' h1' v1' m1'"
+   \<forall>r' rE' rM' h0' epoch0' m0' h1' epoch1' m1'.
+      epoch0' + epoch1' - rE' < epoch0 + epoch1 - rE \<longrightarrow> \<not> justification_fork_with_root s r' rE' rM' h0' epoch0' m0' h1' epoch1' m1'"
   show ?thesis using j a0 a1 a2 a3 a4 by(rule close_justification_three; auto)
 qed
 
 lemma close_justification_one:
-  "justification_fork_with_root s r rE rM h0 v0 m0 h1 v1 m1 \<Longrightarrow>
-   \<forall>r' rE' rM' h0' v0' m0' h1' v1' m1'.
-      v0' + v1' - rE' < v0 + v1 - rE \<longrightarrow> \<not> justification_fork_with_root s r' rE' rM' h0' v0' m0' h1' v1' m1' \<Longrightarrow>
-   close_finalization s r rE rM h0 v0 m0"
+  "justification_fork_with_root s r rE rM h0 epoch0 m0 h1 epoch1 m1 \<Longrightarrow>
+   \<forall>r' rE' rM' h0' epoch0' m0' h1' epoch1' m1'.
+      epoch0' + epoch1' - rE' < epoch0 + epoch1 - rE \<longrightarrow> \<not> justification_fork_with_root s r' rE' rM' h0' epoch0' m0' h1' epoch1' m1' \<Longrightarrow>
+   close_finalization s r rE rM h0 epoch0 m0"
   apply (simp add: justification_fork_with_root_def)
   apply (rule_tac close_justification_two; auto)
   apply (auto simp add: justification_fork_with_root_def)
   by blast
 
 lemma small_fork_has_close_justification :
-  "small_fork s r rE rM h0 v0 m0 h1 v1 m1 \<Longrightarrow>
-   close_finalization s r rE rM h0 v0 m0"
+  "small_fork s r rE rM h0 epoch0 m0 h1 epoch1 m1 \<Longrightarrow>
+   close_finalization s r rE rM h0 epoch0 m0"
   apply(simp add: small_fork_def)
   apply(rule close_justification_one; auto)
   by blast
@@ -1121,9 +1123,9 @@ qed
 
 
 lemma justified_is_voted:
-   "justified_with_root_with_n_switchings n r rE rM s h v m \<Longrightarrow>
-    rE \<noteq> v \<Longrightarrow>
-    \<exists>q0 p0 pv0. voted_by s q0 (vset_fwd h) p0 pv0 h v \<and> (m = FinalizingChild) = (pv0 + 1 = v)"
+   "justified_with_root_with_n_switchings n r rE rM s h epoch m \<Longrightarrow>
+    rE \<noteq> epoch \<Longrightarrow>
+    \<exists>q0 p0 pv0. voted_by s q0 (vset_fwd h) p0 pv0 h epoch \<and> (m = FinalizingChild) = (pv0 + 1 = epoch)"
 proof(induct rule: justified_with_root_with_n_switchings.induct)
 case (justified_genesis_n r r' rE rE' mode mode' n s)
   then show ?case by simp
@@ -1152,9 +1154,9 @@ next
 qed
 
 lemma justified_is_voted_bwd:
-   "justified_with_root_with_n_switchings n r rE rM s h v m \<Longrightarrow>
-    rE \<noteq> v \<Longrightarrow>
-    \<exists>q0 p0 pv0. voted_by s q0 (vset_bwd h) p0 pv0 h v \<and> (m = FinalizingChild) = (pv0 + 1 = v)"
+   "justified_with_root_with_n_switchings n r rE rM s h epoch m \<Longrightarrow>
+    rE \<noteq> epoch \<Longrightarrow>
+    \<exists>q0 p0 pv0. voted_by s q0 (vset_bwd h) p0 pv0 h epoch \<and> (m = FinalizingChild) = (pv0 + 1 = epoch)"
 proof(induct rule: justified_with_root_with_n_switchings.induct)
 case (justified_genesis_n r r' rE rE' mode mode' n s)
 then show ?case by simp
@@ -1177,15 +1179,15 @@ qed
 
 
 lemma zero_switching_involves_root_vote:
-   "rE \<noteq> v \<Longrightarrow>
-    justified_with_root_with_n_switchings 0 r rE Usual s h0 v m0 \<Longrightarrow>
-    \<exists>q0 p0 pv0. voted_by s q0 (vset_fwd r) p0 pv0 h0 v"
+   "rE \<noteq> epoch \<Longrightarrow>
+    justified_with_root_with_n_switchings 0 r rE Usual s h0 epoch m0 \<Longrightarrow>
+    \<exists>q0 p0 pv0. voted_by s q0 (vset_fwd r) p0 pv0 h0 epoch"
 proof -
-  assume j: "justified_with_root_with_n_switchings 0 r rE Usual s h0 v m0"
+  assume j: "justified_with_root_with_n_switchings 0 r rE Usual s h0 epoch m0"
   have same: "vset_fwd r = vset_fwd h0"
     using j zero_switching_means by blast
-  assume non_trivial: "rE \<noteq> v"
-  have v: "\<exists>q0 p0 pv0. voted_by s q0 (vset_fwd h0) p0 pv0 h0 v"
+  assume non_trivial: "rE \<noteq> epoch"
+  have v: "\<exists>q0 p0 pv0. voted_by s q0 (vset_fwd h0) p0 pv0 h0 epoch"
     by (meson casper.justified_is_voted casper_axioms j non_trivial)
   show ?thesis
     by (simp add: same v)
@@ -2813,8 +2815,8 @@ proof(induct "v0 + v1 - rE" arbitrary: r rE rM h0 v0 m0 h1 v1 m1 rule: less_indu
 qed
 
 lemma justification_accountable_safety :
-  "justification_fork_with_root s genesis 0 Usual h0 v0 m0 h1 v1 m1 \<Longrightarrow>
-   \<exists> h v m q. justified s h v m \<and> one_third_of_fwd_or_bwd_slashed s h q"
+  "justification_fork_with_root s genesis 0 Usual h0 epoch0 m0 h1 epoch1 m1 \<Longrightarrow>
+   \<exists> h epoch m q. justified s h epoch m \<and> one_third_of_fwd_or_bwd_slashed s h q"
   using casper.small_accountable_safety casper_axioms justification_fork_to_small by fastforce
 
 lemma nth_parent_is_ancestor:
@@ -2841,7 +2843,7 @@ lemma usual_link_connects_ancestor_descendant:
   using usual_link_def voted_by_both_connects_ancestor_descendant by blast
 
 lemma justification_is_ancestor:
-  "justified_with_root h1 v1 m1 s h0 v0 m0 \<Longrightarrow>
+  "justified_with_root h1 epoch1 m1 s h0 epoch0 m0 \<Longrightarrow>
    h1 \<leftarrow>\<^sup>* h0 \<or> h1 = h0"
 proof(induct rule:justified_with_root.induct)
   case (justified_genesis r rE s)
@@ -2859,15 +2861,15 @@ qed
 
 
 lemma fork_to_justification_fork_with_root:
-  "fork s h0 v0 m0 h1 v1 m1 \<Longrightarrow>
-   justification_fork_with_root s genesis 0 Usual h0 v0 m0 h1 v1 m1"
+  "fork s h0 epoch0 m0 h1 epoch1 m1 \<Longrightarrow>
+   justification_fork_with_root s genesis 0 Usual h0 epoch0 m0 h1 epoch1 m1"
   by (metis fork_def justification_fork_with_root_def justification_is_ancestor justified_genesis)
 
 (** intermediate stuff ends here **)
 
 lemma accountable_safety :
-  "fork s h0 v0 m0 h1 v1 m1 \<Longrightarrow>
-   \<exists> h v m q. justified s h v m \<and> one_third_of_fwd_or_bwd_slashed s h q"
+  "fork s h0 epoch0 m0 h1 epoch1 m1 \<Longrightarrow>
+   \<exists> h epoch m q. justified s h epoch m \<and> one_third_of_fwd_or_bwd_slashed s h q"
   using fork_to_justification_fork_with_root justification_accountable_safety by blast
 
 end
