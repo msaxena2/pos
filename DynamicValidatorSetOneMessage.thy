@@ -23,23 +23,23 @@ begin
 (* many things are copied and adjusted from @nano-o's contribution. *)
 
 locale byz_quorums =
-  -- "Here we fix two types @{typ 'q2} and @{typ 'q1} for quorums and one type @{typ 'v} for
+  -- "Here we fix two types @{typ 'big_quorum} and @{typ 'small_quorum} for quorums and one type @{typ 'vpool} for
       validator sets. of cardinality greater than 2/3 of 
 the validators and quorum of cardinality greater than 1/3 of the validators."
-  fixes member_1 :: "'n \<Rightarrow> 'q1 \<Rightarrow> 'v \<Rightarrow> bool" ("_ \<in>\<^sub>1 _ of _" 50)
+  fixes member_1 :: "'validator \<Rightarrow> 'small_quorum \<Rightarrow> 'vpool \<Rightarrow> bool" ("_ \<in>\<^sub>1 _ of _" 50)
     -- "Membership in 1/3 set"
-    and member_2 :: "'n \<Rightarrow> 'q2 \<Rightarrow> 'v \<Rightarrow> bool" ("_ \<in>\<^sub>2 _ of _" 50)
+    and member_2 :: "'validator \<Rightarrow> 'big_quorum \<Rightarrow> 'vpool \<Rightarrow> bool" ("_ \<in>\<^sub>2 _ of _" 50)
     -- "Membership in 2/3 set"
   fixes
-    hash_parent :: "'h \<Rightarrow> 'h \<Rightarrow> bool" (infix "\<leftarrow>" 50) (* parent <- child *)
+    hash_parent :: "'hash \<Rightarrow> 'hash \<Rightarrow> bool" (infix "\<leftarrow>" 50) (* parent <- child *)
   fixes
-    genesis :: 'h
+    genesis :: 'hash
   fixes
-    vset_fwd :: "'h \<Rightarrow> 'v"
+    vset_fwd :: "'hash \<Rightarrow> 'vpool"
   fixes
-    vset_bwd :: "'h \<Rightarrow> 'v"
+    vset_bwd :: "'hash \<Rightarrow> 'vpool"
   fixes
-    vset_chosen :: "'h \<Rightarrow> 'v"
+    vset_chosen :: "'hash \<Rightarrow> 'vpool"
     -- "the next set chosen in the dynasity: https://ethresear.ch/t/casper-ffg-with-one-message-type-and-simpler-fork-choice-rule/103/34"
   assumes
   -- "Here we make assumptions about hashes. In reality any message containing a hash not satisfying those
@@ -48,17 +48,15 @@ should be dropped."
   "\<And> h1 h2 . h1 \<leftarrow> h2 \<Longrightarrow> h1 \<noteq> h2"
   and "\<And> h1 h2 h3 . \<lbrakk>h2 \<leftarrow> h1; h3 \<leftarrow> h1\<rbrakk> \<Longrightarrow> h2 = h3"
   and "\<And> q1 q2 vs. \<exists> q3 . \<forall> n . (n \<in>\<^sub>1 q3 of vs) \<longrightarrow> (n \<in>\<^sub>2 q1 of vs) \<and> (n \<in>\<^sub>2 q2 of vs)"
-    -- "This is the only property of types @{typ 'q1} and @{typ 'q2} that we need:
-    2/3 quorums have 1/3 intersection"
-
-    -- "2/3-lb quorums have (1/3 - 4/3 \<epsilon>)-ub intersection"
+    -- "This is the only property of types @{typ 'small_quorum} and @{typ 'big_quorum} that we need:
+    any two big-quorums have a small-quorum in the intersection (under any validator pool)."
 
 
 (* how do we get the forward and the backward validator set? *)
-record ('n,'h)state =
+record ('validator,'h)state =
   -- "@{typ 'n} is the type of validators (nodes), @{typ 'h} hashes, and views are @{typ nat}"
   -- "vote_msg node hash view view_src"
-  vote_msg :: "'n \<Rightarrow> 'h \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool"
+  vote_msg :: "'validator \<Rightarrow> 'h \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool"
 
 
 locale casper = byz_quorums
