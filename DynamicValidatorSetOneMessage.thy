@@ -64,10 +64,6 @@ record ('n,'h)state =
 locale casper = byz_quorums
 begin
 
-lemma hoge:
-  "\<exists> q.  \<forall> n.  (n \<in>\<^sub>1 q of (vset_fwd root)) \<longrightarrow> ((n \<in>\<^sub>2 q0 of (vset_fwd root)) \<and> (n \<in>\<^sub>2 q1 of (vset_fwd root)))"
-  using byz_quorums_axioms byz_quorums_def by force
-
 inductive nth_parent where
   zeroth_parent: "nth_parent (0 :: nat) h h"
 | Sth_parent: "nth_parent n oldest mid \<Longrightarrow> mid \<leftarrow> newest \<Longrightarrow> nth_parent (Suc n) oldest newest"
