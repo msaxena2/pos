@@ -26,10 +26,18 @@ locale byz_quorums =
   -- "Here we fix two types @{typ 'big_quorum} and @{typ 'small_quorum} for quorums and one type @{typ 'vpool} for
       validator sets. of cardinality greater than 2/3 of 
 the validators and quorum of cardinality greater than 1/3 of the validators."
+  (* Xiaohong: I don't know why we need three types here. It seems that they are all sets of
+               validators.   *)
   fixes member_1 :: "'validator \<Rightarrow> 'small_quorum \<Rightarrow> 'vpool \<Rightarrow> bool" ("_ \<in>\<^sub>1 _ of _" 50)
     -- "Membership in 1/3 set"
+    (* Xiaohong: This membership predicate is a conjunction of two.
+                 member_1 v vs0 vs is true iff v \<in> vs0 and 3 * (card vs0) = (card vs) 
+                 member_2 is similar.  *)
     and member_2 :: "'validator \<Rightarrow> 'big_quorum \<Rightarrow> 'vpool \<Rightarrow> bool" ("_ \<in>\<^sub>2 _ of _" 50)
     -- "Membership in 2/3 set"
+    (* Xiaohong: Given that above said, we don't really need the facts about cardinalities of sets.
+                 All we need to know is that any two big_quorums have a small_quorum in common
+                 (see the last assumption in this definition).  *)
   fixes
     hash_parent :: "'hash \<Rightarrow> 'hash \<Rightarrow> bool" (infix "\<leftarrow>" 50) (* parent <- child *)
   fixes
@@ -40,6 +48,7 @@ the validators and quorum of cardinality greater than 1/3 of the validators."
     vset_bwd :: "'hash \<Rightarrow> 'vpool"
   fixes
     vset_chosen :: "'hash \<Rightarrow> 'vpool"
+    (* Xiaohong: I don't understand this. *)
     -- "the next set chosen in the dynasity: https://ethresear.ch/t/casper-ffg-with-one-message-type-and-simpler-fork-choice-rule/103/34"
   assumes
   -- "Here we make assumptions about hashes. In reality any message containing a hash not satisfying those
@@ -47,7 +56,7 @@ should be dropped."
   -- "a hash has at most one parent which is not itself"
   "\<And> h1 h2 . h1 \<leftarrow> h2 \<Longrightarrow> h1 \<noteq> h2"
   and "\<And> h1 h2 h3 . \<lbrakk>h2 \<leftarrow> h1; h3 \<leftarrow> h1\<rbrakk> \<Longrightarrow> h2 = h3"
-  and "\<And> q1 q2 vs. \<exists> q3 . \<forall> n . (n \<in>\<^sub>1 q3 of vs) \<longrightarrow> (n \<in>\<^sub>2 q1 of vs) \<and> (n \<in>\<^sub>2 q2 of vs)"
+  and "\<And> bq1 bq2 vs. \<exists> sq . \<forall> v . (v \<in>\<^sub>1 sq of vs) \<longrightarrow> (v \<in>\<^sub>2 bq1 of vs) \<and> (v \<in>\<^sub>2 bq2 of vs)"
     -- "This is the only property of types @{typ 'small_quorum} and @{typ 'big_quorum} that we need:
     any two big-quorums have a small-quorum in the intersection (under any validator pool)."
 
@@ -62,29 +71,37 @@ record ('validator,'h)state =
 locale casper = byz_quorums
 begin
 
+(* Xiaohong: Don't try to add type to the next inductive definition. 
+   The only type that typecheck it is "nat \<Rightarrow> 'e \<Rightarrow> 'e \<Rightarrow> bool",
+   where 'e is the type of hash in the current casper locale.
+   I'll not try to add types to any definition. *)
 inductive nth_parent where
   zeroth_parent: "nth_parent (0 :: nat) h h"
 | Sth_parent: "nth_parent n oldest mid \<Longrightarrow> mid \<leftarrow> newest \<Longrightarrow> nth_parent (Suc n) oldest newest"
 
+(* Xiaohong: msg voted by big_quorum bq, from orig at epoch 2 to h at epoch 1*)
 definition voted_by where
-  "voted_by s q vset orig epoch2 h epoch1 \<equiv>
+  "voted_by s bq vset orig epoch2 h epoch1 \<equiv>
      epoch1 \<noteq> 0 \<and> epoch2 < epoch1 \<and> nth_parent (epoch1 - epoch2) orig h \<and>
-     (\<forall> n. (n \<in>\<^sub>2 q of vset) \<longrightarrow> vote_msg s n h epoch1 epoch2)"
+     (\<forall> v. (v \<in>\<^sub>2 bq of vset) \<longrightarrow> vote_msg s v h epoch1 epoch2)"
 
 (* the forward set and the backward set must be taken from orig, not from h.
  * Otherwise, there is a forking situation.
  *)
+(* Xiaohong: Then why in the definitions, it's "vset_fwd h", not "vset_fwd orig"? *)
+
+(* Xiaohong: msg voted by big_quorum bq w.r.t. the forward set. *)
 definition voted_by_fwd where
-  "voted_by_fwd s q orig epoch2 h epoch1 \<equiv>
-     voted_by s q (vset_fwd h) orig epoch2 h epoch1"
+  "voted_by_fwd s bq orig epoch2 h epoch1 \<equiv>
+     voted_by s bq (vset_fwd h) orig epoch2 h epoch1"
 
 definition voted_by_bwd where
-  "voted_by_bwd s q orig epoch2 h epoch1 \<equiv>
-     voted_by s q (vset_bwd h) orig epoch2 h epoch1"
+  "voted_by_bwd s bq orig epoch2 h epoch1 \<equiv>
+     voted_by s bq (vset_bwd h) orig epoch2 h epoch1"
 
 definition voted_by_both where
-  "voted_by_both s q0 q1 orig epoch2 h epoch1 \<equiv> voted_by_fwd s q0 orig epoch2 h epoch1
-      \<and> voted_by_bwd s q1 orig epoch2 h epoch1"
+  "voted_by_both s bq0 bq1 orig epoch2 h epoch1 \<equiv> voted_by_fwd s bq0 orig epoch2 h epoch1
+      \<and> voted_by_bwd s bq1 orig epoch2 h epoch1"
 
 inductive hash_ancestor (infix "\<leftarrow>\<^sup>*" 50) where
   "h1 \<leftarrow> h2 \<Longrightarrow> h1 \<leftarrow>\<^sup>* h2"
