@@ -62,7 +62,7 @@ should be dropped."
 
 
 (* how do we get the forward and the backward validator set? *)
-record ('validator,'h)state =
+record ('validator,'h) state =
   -- "@{typ 'n} is the type of validators (nodes), @{typ 'h} hashes, and views are @{typ nat}"
   -- "vote_msg node hash view view_src"
   vote_msg :: "'validator \<Rightarrow> 'h \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool"
@@ -89,6 +89,10 @@ definition voted_by where
  * Otherwise, there is a forking situation.
  *)
 (* Xiaohong: Then why in the definitions, it's "vset_fwd h", not "vset_fwd orig"? *)
+(* Xiaohong: But I guess it shouldn't matter, as we are now voting, so none of
+             the blocks between orig and h are finalized. Therefore, the blocks
+             orig and h are in the same destiny, and thus have the same sets of
+             fwd and bwd validators. *)
 
 (* Xiaohong: msg voted by big_quorum bq w.r.t. the forward set. *)
 definition voted_by_fwd where
@@ -113,6 +117,8 @@ lemma hash_ancestor_intro': assumes "h1 \<leftarrow>\<^sup>* h2" and "h2 \<lefta
 lemma hash_ancestor_trans: assumes "h1 \<leftarrow>\<^sup>* h2" and "h2 \<leftarrow>\<^sup>* h3" shows "h1 \<leftarrow>\<^sup>* h3" 
   using assms by (induct h1 h2 rule:hash_ancestor.induct) auto
 
+(* Xiaohong: These definitions of links are not in the paper. *)
+
 definition validator_changing_link where
 "validator_changing_link s q0 q1 orig origE new newE \<equiv>
    voted_by_both s q0 q1 orig origE new newE \<and>
@@ -124,6 +130,8 @@ definition usual_link where
    vset_bwd orig = vset_bwd new \<and> vset_fwd orig = vset_fwd new"
 
 datatype Mode = Usual | FinalizingChild
+
+(* Xiaohong: justified_with_root :: has \<Rightarrow> nat \<Rightarrow> Mode \<Rightarrow> state \<Rightarrow> hash \<Rightarrow> nat \<Rightarrow> Mode \<Rightarrow> bool *)
 
 inductive justified_with_root where
   justified_genesis: "r = r' \<Longrightarrow> rE = rE' \<Longrightarrow> justified_with_root r rE mode s r' rE' mode"
@@ -137,6 +145,9 @@ inductive justified_with_root where
     validator_changing_link s q0 q1 c e h ee \<Longrightarrow>
     newM = (if ee - e = 1 then FinalizingChild else Usual) \<Longrightarrow>
     justified_with_root r rE mode s h ee newM"
+
+term justified_with_root
+
 
 inductive finalized_with_root where
  under_usual_link:
@@ -156,6 +167,8 @@ definition fork where
     (finalized_with_root genesis 0 Usual s h0 child0 epoch0 m0
     \<and> finalized_with_root genesis 0 Usual s h1 child1 epoch1 m1 \<and>
      \<not>(h1 \<leftarrow>\<^sup>* h0 \<or> h0 \<leftarrow>\<^sup>* h1 \<or> h0 = h1))"
+
+(* Xiaohong: vote_msg :: state \<Rightarrow> validator \<Rightarrow> hash \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool *)
 
 definition slashed_dbl where "slashed_dbl s n \<equiv>
   \<exists> h0 h1 epoch epoch0 epoch1. (h0 \<noteq> h1 \<or> epoch0 \<noteq> epoch1) \<and> vote_msg s n h0 epoch epoch0 \<and> vote_msg s n h1 epoch epoch1" (* not v, maybe e for epoch *)
