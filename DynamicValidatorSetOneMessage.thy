@@ -22,22 +22,20 @@ begin
 
 (* many things are copied and adjusted from @nano-o's contribution. *)
 
+text "Here we define the basic infrastructure of our abstract model of Casper.
+First a few type declarations. The basic type that we need is
+@{typ 'vpool}, the set of all validators. "
+
 locale byz_quorums =
   -- "Here we fix two types @{typ 'big_quorum} and @{typ 'small_quorum} for quorums and one type @{typ 'vpool} for
       validator sets. of cardinality greater than 2/3 of 
 the validators and quorum of cardinality greater than 1/3 of the validators."
-  (* Xiaohong: I don't know why we need three types here. It seems that they are all sets of
-               validators.   *)
+
   fixes member_1 :: "'validator \<Rightarrow> 'small_quorum \<Rightarrow> 'vpool \<Rightarrow> bool" ("_ \<in>\<^sub>1 _ of _" 50)
     -- "Membership in 1/3 set"
-    (* Xiaohong: This membership predicate is a conjunction of two.
-                 member_1 v vs0 vs is true iff v \<in> vs0 and 3 * (card vs0) = (card vs) 
-                 member_2 is similar.  *)
+
     and member_2 :: "'validator \<Rightarrow> 'big_quorum \<Rightarrow> 'vpool \<Rightarrow> bool" ("_ \<in>\<^sub>2 _ of _" 50)
     -- "Membership in 2/3 set"
-    (* Xiaohong: Given that above said, we don't really need the facts about cardinalities of sets.
-                 All we need to know is that any two big_quorums have a small_quorum in common
-                 (see the last assumption in this definition).  *)
   fixes
     hash_parent :: "'hash \<Rightarrow> 'hash \<Rightarrow> bool" (infix "\<leftarrow>" 50) (* parent <- child *)
   fixes
