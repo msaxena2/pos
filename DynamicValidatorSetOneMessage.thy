@@ -146,7 +146,7 @@ definition voted_by where
  * Otherwise, there is a forking situation.
  *)
 
-(* Xiaohong: The above comment is conflict against the following code
+(* The above comment is conflict against the following code
    as well as the whitepaper. The code is compatible with the whitepaper.
    The forward and backward sets should be taken from the target checkpoints *)
 
@@ -202,7 +202,6 @@ definition usual_link where
 
 datatype Mode = Usual | FinalizingChild
 
-(* Xiaohong: justified_with_root :: hash \<Rightarrow> nat \<Rightarrow> Mode \<Rightarrow> state \<Rightarrow> hash \<Rightarrow> nat \<Rightarrow> Mode \<Rightarrow> bool *)
 
 text"The function @{term justified_with_root} tells us if
 a hash is justified, given the state of the network and 
@@ -215,6 +214,9 @@ by a validator_changing_link.
 Usual_link (in which the validators are not allowed to change)
 can only be used to justify hashes that possess a distince of at least two.
 "
+
+(* justified_with_root :: hash \<Rightarrow> nat \<Rightarrow> Mode \<Rightarrow> state \<Rightarrow> hash \<Rightarrow> nat \<Rightarrow> Mode \<Rightarrow> bool *)
+
 
 inductive justified_with_root where
   justified_genesis: "r = r' \<Longrightarrow> rE = rE' \<Longrightarrow> justified_with_root r rE mode s r' rE' mode"
