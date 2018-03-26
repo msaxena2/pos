@@ -23,8 +23,56 @@ begin
 (* many things are copied and adjusted from @nano-o's contribution. *)
 
 text "Here we define the basic infrastructure of our abstract model of Casper.
-First a few type declarations. The basic type that we need is
-@{typ 'vpool}, the set of all validators. "
+We start with a few type declarations.
+The basic types that we need are @{typ 'validator} and @{typ 'vpool},
+where the former is the type of validators
+and the latter is the type of the total sets of validators.
+We consider total ''sets'' here 
+because in this setting the total set may be able to change
+as the system evolves.
+Therefore, two total sets may be different from each other, and thus
+the type @{typ 'vpool} contains more than one element.
+In this abstract model, we do not really care the concrete construction of
+validators and the total sets.
+"
+
+text "Apart from the total sets, we introduce two other types for
+big quorum sets and small quorum sets.
+Mathematically speaking, they are subsets of the total set of validators.
+However, in this abstract model, we do not need that information.
+The only relation we need is two ternary relations.
+They are @{typ 'member_1} and @{typ 'member_2} as shown in the next definition,
+together with one assumption about them
+(the last assumption in the next definition).
+"
+
+text "Declarations and assumptions about @{typ 'hash_parent} should be
+self-explained. 
+Notice that we use the notation parent <- child, where links point to
+parents.
+This is the opposite to the whitepaper.
+"
+
+text "The type @{typ 'vset_chosen} needs some explanation.
+In this abstract model, the total set of validators may change.
+The links where the total set of validators does not change
+are called @{term usual_link}.
+The links where the total set of validators change
+are called @{term validator_changing_link}.
+Here we quote Vitalik Buterin:
+QUOTE BEGINS The validator set increments between a checkpoint C and its child if, in the context of the child, the parent of C was finalized by a supermajority link between the parent of C and C.
+''in the context of the child'': the evidence that the finalization occurred was included in the blockchain between C and the child.
+https://ethresear.ch/t/casper-ffg-with-one-message-type-and-simpler-fork-choice-rule/103/22
+QUOTE ENDS
+Therefore, the increment of the total set is only realized in at least two
+checkpoints (from the parent of C to a child of C).
+That is the reason why in the next definition, we maintain three types,
+one for each of the forward set, backward (rear) set, as well as
+the chosen set, which is exactly the set after the increment.
+When proper conditions of set increments happen, the chosen set will become the
+current forward set, (and the forward set will become the backward set, by
+definition).
+"
 
 locale byz_quorums =
   -- "Here we fix two types @{typ 'big_quorum} and @{typ 'small_quorum} for quorums and one type @{typ 'vpool} for
@@ -46,7 +94,6 @@ the validators and quorum of cardinality greater than 1/3 of the validators."
     vset_bwd :: "'hash \<Rightarrow> 'vpool"
   fixes
     vset_chosen :: "'hash \<Rightarrow> 'vpool"
-    (* Xiaohong: I don't understand this. *)
     -- "the next set chosen in the dynasity: https://ethresear.ch/t/casper-ffg-with-one-message-type-and-simpler-fork-choice-rule/103/34"
   assumes
   -- "Here we make assumptions about hashes. In reality any message containing a hash not satisfying those
@@ -60,24 +107,36 @@ should be dropped."
 
 
 (* how do we get the forward and the backward validator set? *)
+text "A state (of the network) contains a field called @{term vote_msg}.
+Intuitively, it represents the pool of all voting messages.
+The @{term vote_msg} function tells which message is included in the pool.
+The arguments represent (in their order)
+0. An implicit argument of the current state
+1. The validator that votes
+2. The hash of the target checkpoint
+3. The height of the target checkpoint
+4. The height of the source checkpoint
+"
+
 record ('validator,'h) state =
-  -- "@{typ 'n} is the type of validators (nodes), @{typ 'h} hashes, and views are @{typ nat}"
-  -- "vote_msg node hash view view_src"
+  -- "@{typ 'validator} is the type of validators (nodes), 
+      @{typ 'h} hashes, and views are @{typ nat}"
+  -- "vote_msg validator hash view view_src"
   vote_msg :: "'validator \<Rightarrow> 'h \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool"
 
-
 locale casper = byz_quorums
+
 begin
 
-(* Xiaohong: Don't try to add type to the next inductive definition. 
+(* Don't try to add type to the next inductive definition. 
    The only type that typecheck it is "nat \<Rightarrow> 'e \<Rightarrow> 'e \<Rightarrow> bool",
-   where 'e is the type of hash in the current casper locale.
-   I'll not try to add types to any definition. *)
+   where 'e is the type of hash in the current casper locale. *)
+
 inductive nth_parent where
   zeroth_parent: "nth_parent (0 :: nat) h h"
 | Sth_parent: "nth_parent n oldest mid \<Longrightarrow> mid \<leftarrow> newest \<Longrightarrow> nth_parent (Suc n) oldest newest"
 
-(* Xiaohong: msg voted by big_quorum bq, from orig at epoch 2 to h at epoch 1*)
+(* msg voted by big_quorum bq, from orig at epoch 2 to h at epoch 1*)
 definition voted_by where
   "voted_by s bq vset orig epoch2 h epoch1 \<equiv>
      epoch1 \<noteq> 0 \<and> epoch2 < epoch1 \<and> nth_parent (epoch1 - epoch2) orig h \<and>
@@ -86,13 +145,11 @@ definition voted_by where
 (* the forward set and the backward set must be taken from orig, not from h.
  * Otherwise, there is a forking situation.
  *)
-(* Xiaohong: Then why in the definitions, it's "vset_fwd h", not "vset_fwd orig"? *)
-(* Xiaohong: But I guess it shouldn't matter, as we are now voting, so none of
-             the blocks between orig and h are finalized. Therefore, the blocks
-             orig and h are in the same destiny, and thus have the same sets of
-             fwd and bwd validators. *)
 
-(* Xiaohong: msg voted by big_quorum bq w.r.t. the forward set. *)
+(* Xiaohong: The above comment is conflict against the following code
+   as well as the whitepaper. The code is compatible with the whitepaper.
+   The forward and backward sets should be taken from the target checkpoints *)
+
 definition voted_by_fwd where
   "voted_by_fwd s bq orig epoch2 h epoch1 \<equiv>
      voted_by s bq (vset_fwd h) orig epoch2 h epoch1"
@@ -115,12 +172,28 @@ lemma hash_ancestor_intro': assumes "h1 \<leftarrow>\<^sup>* h2" and "h2 \<lefta
 lemma hash_ancestor_trans: assumes "h1 \<leftarrow>\<^sup>* h2" and "h2 \<leftarrow>\<^sup>* h3" shows "h1 \<leftarrow>\<^sup>* h3" 
   using assms by (induct h1 h2 rule:hash_ancestor.induct) auto
 
-(* Xiaohong: These definitions of links are not in the paper. *)
+text"This supermajority link changes the set of validators.
+The backward validators in the new hash is the forward validator in the 
+origin hash.
+The forward validators in the new hash changes to the chosen validators
+in the origin hash.
+As we said in the above, the chosen validators set has been prepared and ready
+at least two checkpoints before it takes effect (which happens now).
+"
 
 definition validator_changing_link where
 "validator_changing_link s q0 q1 orig origE new newE \<equiv>
    voted_by_both s q0 q1 orig origE new newE \<and>
    vset_bwd new = vset_fwd orig \<and> vset_fwd new = vset_chosen orig"
+
+text"The usual supermajority link is when the total set of validators does not change.
+In that case, as long as both a majority of the forward and backward validators
+vote for the link, it is established (nothing explicit happens though. 
+We just know that the state of the network satisfies @{term voted_by_both}
+relation, which can then be used in proving other properties.)
+In the meantime, the sets of forward and backward sets of validators do not
+change.
+"
 
 definition usual_link where
 "usual_link s q0 q1 orig origE new newE \<equiv>
@@ -129,7 +202,19 @@ definition usual_link where
 
 datatype Mode = Usual | FinalizingChild
 
-(* Xiaohong: justified_with_root :: has \<Rightarrow> nat \<Rightarrow> Mode \<Rightarrow> state \<Rightarrow> hash \<Rightarrow> nat \<Rightarrow> Mode \<Rightarrow> bool *)
+(* Xiaohong: justified_with_root :: hash \<Rightarrow> nat \<Rightarrow> Mode \<Rightarrow> state \<Rightarrow> hash \<Rightarrow> nat \<Rightarrow> Mode \<Rightarrow> bool *)
+
+text"The function @{term justified_with_root} tells us if
+a hash is justified, given the state of the network and 
+a root hash that is justified.
+A hash is called FinalizingChild if it finalizes a justified hash
+(i.e., the root hash).
+In other words, if it is the direct child of its parent.
+Notice that FinalizingChild hash can only be used to justify another hash
+by a validator_changing_link.
+Usual_link (in which the validators are not allowed to change)
+can only be used to justify hashes that possess a distince of at least two.
+"
 
 inductive justified_with_root where
   justified_genesis: "r = r' \<Longrightarrow> rE = rE' \<Longrightarrow> justified_with_root r rE mode s r' rE' mode"
@@ -144,8 +229,12 @@ inductive justified_with_root where
     newM = (if ee - e = 1 then FinalizingChild else Usual) \<Longrightarrow>
     justified_with_root r rE mode s h ee newM"
 
-term justified_with_root
-
+text"A hash is finalized (given a root has)
+if it is justfied and there is a link
+to one of its direct children. The mode of a finalized hash
+is the same as its mode as a justified hash, which we just defined
+in the above definition.
+"
 
 inductive finalized_with_root where
  under_usual_link:
@@ -157,8 +246,17 @@ inductive finalized_with_root where
      validator_changing_link s q0 q1 c e h (e + 1) \<Longrightarrow>
       finalized_with_root r rE mode s c h e FinalizingChild"
 
+text"A hash is justified in the state of the network if it is justified
+with the root hash being the genesis hash.
+"
+
 abbreviation justified where
   "justified s h v m \<equiv> justified_with_root genesis 0 Usual s h v m"
+
+text"A fork is a situation when there exist two hashes
+@{term child0} and @{term child1} such that
+both of them are justified, and they are in different branches.
+"
 
 definition fork where
   "fork s h0 epoch0 m0 h1 epoch1 m1 \<equiv> \<exists> child0 child1.
@@ -166,16 +264,28 @@ definition fork where
     \<and> finalized_with_root genesis 0 Usual s h1 child1 epoch1 m1 \<and>
      \<not>(h1 \<leftarrow>\<^sup>* h0 \<or> h0 \<leftarrow>\<^sup>* h1 \<or> h0 = h1))"
 
-(* Xiaohong: vote_msg :: state \<Rightarrow> validator \<Rightarrow> hash \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool *)
+(* vote_msg :: state \<Rightarrow> validator \<Rightarrow> hash \<Rightarrow> epoch \<Rightarrow> epoch \<Rightarrow> bool *)
+
+text"Slash_DBL happens if a validator @{term n} votes for
+two different hashes at the same height,
+or the same hash but from different source hashes
+(captured by epoch0 =/= epoch1 )
+"
 
 definition slashed_dbl where "slashed_dbl s n \<equiv>
   \<exists> h0 h1 epoch epoch0 epoch1. (h0 \<noteq> h1 \<or> epoch0 \<noteq> epoch1) \<and> vote_msg s n h0 epoch epoch0 \<and> vote_msg s n h1 epoch epoch1" (* not v, maybe e for epoch *)
 (* source difference needs to be punished as well, for
  * https://ethresear.ch/t/casper-ffg-with-one-message-type-and-simpler-fork-choice-rule/103/41?u=yhirai *)
+text "Slash_SURROUND happens if 
+a validator @{term n} votes two messages, in which
+one strictly covers the other (in terms of their heights).
+"
 
 definition slashed_surround where "slashed_surround s n \<equiv>
   \<exists> h0 h1 epoch0 epoch1 vs0 vs1. vs0 < vs1 \<and> vs1 < epoch1 \<and> epoch1 < epoch0
           \<and> vote_msg s n h0 epoch0 vs0 \<and> vote_msg s n h1 epoch1 vs1"
+
+text"A slashing condition happens if Slash_DBL or Slash_SURROUND happens."
 
 definition slashed where "slashed s n \<equiv> 
   slashed_dbl s n \<or> slashed_surround s n"
@@ -2894,6 +3004,15 @@ lemma fork_to_justification_fork_with_root:
   by (metis fork_def justification_fork_with_root_def justification_is_ancestor justified_genesis)
 
 (** intermediate stuff ends here **)
+
+text"The property of accountable safety states that
+whenever there is a fork, with witnesses
+the hash h0 at epoch0
+and hash h1 at epoch1, 
+there must exist a justified hash h at epoch, such that
+at least one third of the forward or backward validators at hash h
+are slashed.
+"
 
 lemma accountable_safety :
   "fork s h0 epoch0 m0 h1 epoch1 m1 \<Longrightarrow>
