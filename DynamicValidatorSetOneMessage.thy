@@ -1125,7 +1125,8 @@ qed
 lemma justified_is_voted:
    "justified_with_root_with_n_switchings n r rE rM s h epoch m \<Longrightarrow>
     rE \<noteq> epoch \<Longrightarrow>
-    \<exists>q0 p0 pv0. voted_by s q0 (vset_fwd h) p0 pv0 h epoch \<and> (m = FinalizingChild) = (pv0 + 1 = epoch)"
+    \<exists>q0 p0 prev_epoch0. voted_by s q0 (vset_fwd h) p0 prev_epoch0 h epoch
+                        \<and> (m = FinalizingChild) = (prev_epoch0 + 1 = epoch)"
 proof(induct rule: justified_with_root_with_n_switchings.induct)
 case (justified_genesis_n r r' rE rE' mode mode' n s)
   then show ?case by simp
@@ -1156,7 +1157,9 @@ qed
 lemma justified_is_voted_bwd:
    "justified_with_root_with_n_switchings n r rE rM s h epoch m \<Longrightarrow>
     rE \<noteq> epoch \<Longrightarrow>
-    \<exists>q0 p0 pv0. voted_by s q0 (vset_bwd h) p0 pv0 h epoch \<and> (m = FinalizingChild) = (pv0 + 1 = epoch)"
+    \<exists>q0 p0 prev_epoch0.
+      voted_by s q0 (vset_bwd h) p0 prev_epoch0 h epoch \<and>
+      (m = FinalizingChild) = (prev_epoch0 + 1 = epoch)"
 proof(induct rule: justified_with_root_with_n_switchings.induct)
 case (justified_genesis_n r r' rE rE' mode mode' n s)
 then show ?case by simp
@@ -1181,28 +1184,28 @@ qed
 lemma zero_switching_involves_root_vote:
    "rE \<noteq> epoch \<Longrightarrow>
     justified_with_root_with_n_switchings 0 r rE Usual s h0 epoch m0 \<Longrightarrow>
-    \<exists>q0 p0 pv0. voted_by s q0 (vset_fwd r) p0 pv0 h0 epoch"
+    \<exists>q0 p0 prev_epoch0. voted_by s q0 (vset_fwd r) p0 prev_epoch0 h0 epoch"
 proof -
   assume j: "justified_with_root_with_n_switchings 0 r rE Usual s h0 epoch m0"
   have same: "vset_fwd r = vset_fwd h0"
     using j zero_switching_means by blast
   assume non_trivial: "rE \<noteq> epoch"
-  have v: "\<exists>q0 p0 pv0. voted_by s q0 (vset_fwd h0) p0 pv0 h0 epoch"
+  have v: "\<exists>q0 p0 prev_epoch0. voted_by s q0 (vset_fwd h0) p0 prev_epoch0 h0 epoch"
     by (meson casper.justified_is_voted casper_axioms j non_trivial)
   show ?thesis
     by (simp add: same v)
 qed
 
 lemma one_switching_involves_root_vote:
-   "rE \<noteq> v \<Longrightarrow>
-    justified_with_root_with_n_switchings (Suc 0) r rE Usual s h0 v m0 \<Longrightarrow>
-    \<exists>q0 p0 pv0. voted_by s q0 (vset_fwd r) p0 pv0 h0 v"
+   "rE \<noteq> epoch \<Longrightarrow>
+    justified_with_root_with_n_switchings (Suc 0) r rE Usual s h0 epoch m0 \<Longrightarrow>
+    \<exists>q0 p0 prev_epoch0. voted_by s q0 (vset_fwd r) p0 prev_epoch0 h0 epoch"
 proof -
-  assume j: "justified_with_root_with_n_switchings (Suc 0) r rE Usual s h0 v m0"
+  assume j: "justified_with_root_with_n_switchings (Suc 0) r rE Usual s h0 epoch m0"
   have same: "vset_fwd r = vset_bwd h0"
     using j one_switching_means by blast
-  assume non_trivial: "rE \<noteq> v"
-  have v: "\<exists>q0 p0 pv0. voted_by s q0 (vset_bwd h0) p0 pv0 h0 v"
+  assume non_trivial: "rE \<noteq> epoch"
+  have v: "\<exists>q0 p0 prev_epoch0. voted_by s q0 (vset_bwd h0) p0 prev_epoch0 h0 epoch"
     using j justified_is_voted_bwd non_trivial by blast
   show ?thesis
     by (simp add: same v)
@@ -1210,7 +1213,7 @@ qed
 
 
 lemma after_one_switching:
-  "justified_with_root_with_n_switchings n r rE rM s h0 v m0 \<Longrightarrow>
+  "justified_with_root_with_n_switchings n r rE rM s h0 epoch m0 \<Longrightarrow>
    n = Suc 0 \<Longrightarrow>
    rM = FinalizingChild \<Longrightarrow>
    vset_fwd h0 = vset_chosen r \<and> vset_bwd h0 = vset_fwd r"
@@ -1233,13 +1236,14 @@ next
 qed
 
 lemma one_switching_involves_root_vote_f:
-    "justified_with_root_with_n_switchings (Suc 0) r rE FinalizingChild s h0 v m0 \<Longrightarrow>
-    rE < v \<Longrightarrow>
-    \<exists>q0 p0 pv0. voted_by s q0 (vset_chosen r) p0 pv0 h0 v \<and> (m0 = FinalizingChild) = (pv0 + 1 = v)"
+    "justified_with_root_with_n_switchings (Suc 0) r rE FinalizingChild s h0 epoch m0 \<Longrightarrow>
+    rE < epoch \<Longrightarrow>
+    \<exists>q0 p0 pv0. voted_by s q0 (vset_chosen r) p0 pv0 h0 epoch \<and> (m0 = FinalizingChild) = (pv0 + 1 = epoch)"
 proof -
-  assume j: "justified_with_root_with_n_switchings (Suc 0) r rE FinalizingChild s h0 v m0"
-  assume diff: "rE < v"
-  have "\<exists>q0 p0 pv0. voted_by s q0 (vset_fwd h0) p0 pv0 h0 v \<and> (m0 = FinalizingChild) = (pv0 + 1 = v)"
+  assume j: "justified_with_root_with_n_switchings (Suc 0) r rE FinalizingChild s h0 epoch m0"
+  assume diff: "rE < epoch"
+  have "\<exists>q0 p0 pv0. voted_by s q0 (vset_fwd h0) p0 pv0 h0 epoch
+                 \<and> (m0 = FinalizingChild) = (pv0 + 1 = epoch)"
     by (metis casper.justified_is_voted casper_axioms diff j nat_neq_iff)
   moreover have "vset_fwd h0 = vset_chosen r"
     using after_one_switching j by blast
@@ -1247,15 +1251,16 @@ proof -
 qed
 
 lemma close_involves_vote:
-  "close_justification s r rE Usual h0 v m0 \<Longrightarrow>
-   rE \<noteq> v \<Longrightarrow>
-   \<exists> q0 p0 pv0. voted_by s q0 (vset_fwd r) p0 pv0 h0 v"
+  "close_justification s r rE Usual h0 epoch m0 \<Longrightarrow>
+   rE \<noteq> epoch \<Longrightarrow>
+   \<exists> q0 p0 prev_epoch0. voted_by s q0 (vset_fwd r) p0 prev_epoch0 h0 epoch"
   by (metis Mode.simps(1) One_nat_def casper.close_justification_def casper_axioms one_switching_involves_root_vote zero_switching_involves_root_vote)
 
 lemma close_involves_vote_f:
-  "close_justification s r rE FinalizingChild h0 v m0 \<Longrightarrow>
-   rE \<noteq> v \<Longrightarrow>
-   \<exists> q0 p0 pv0. voted_by s q0 (vset_chosen r) p0 pv0 h0 v \<and> (m0 = FinalizingChild) = (pv0 + 1 = v)"
+  "close_justification s r rE FinalizingChild h0 epoch m0 \<Longrightarrow>
+   rE \<noteq> epoch \<Longrightarrow>
+   \<exists> q0 p0 pv0. voted_by s q0 (vset_chosen r) p0 pv0 h0 epoch
+              \<and> (m0 = FinalizingChild) = (pv0 + 1 = epoch)"
   apply(auto simp add: close_justification_def)
   using zero_justification_f apply blast
   using zero_justification_f apply blast
@@ -1265,23 +1270,23 @@ lemma close_involves_vote_f:
   using justified_is_voted_bwd by fastforce
 
 lemma double_vote:
-  "voted_by s q0 vset p0 pv0 h0 v \<Longrightarrow>
-   voted_by s q1 vset p1 pv1 h1 v \<Longrightarrow>
+  "voted_by s q0 vset p0 pv0 h0 epoch \<Longrightarrow>
+   voted_by s q1 vset p1 pv1 h1 epoch \<Longrightarrow>
    h0 \<noteq> h1 \<or> pv0 \<noteq> pv1 \<Longrightarrow>
    \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> slashed s n"
 proof -
-  assume v0: "voted_by s q0 vset p0 pv0 h0 v"
-  assume v1: "voted_by s q1 vset p1 pv1 h1 v"
+  assume v0: "voted_by s q0 vset p0 pv0 h0 epoch"
+  assume v1: "voted_by s q1 vset p1 pv1 h1 epoch"
   have "\<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> (n \<in>\<^sub>2 q0 of vset) \<and> (n \<in>\<^sub>2 q1 of vset)"
     by (metis byz_quorums_axioms byz_quorums_def)
   then obtain q where qP: "\<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> (n \<in>\<^sub>2 q0 of vset) \<and> (n \<in>\<^sub>2 q1 of vset)"
     by blast
-  have vv0: "\<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> vote_msg s n h0 v pv0"
+  have vv0: "\<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> vote_msg s n h0 epoch pv0"
     using qP v0 voted_by_def by blast
-  have vv1: "\<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> vote_msg s n h1 v pv1"
+  have vv1: "\<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> vote_msg s n h1 epoch pv1"
     using qP v1 voted_by_def by blast
   assume diff: "h0 \<noteq> h1 \<or> pv0 \<noteq> pv1"
-  have ddr: "\<forall> n. vote_msg s n h0 v pv0 \<longrightarrow> vote_msg s n h1 v pv1 \<longrightarrow> slashed_dbl s n"
+  have ddr: "\<forall> n. vote_msg s n h0 epoch pv0 \<longrightarrow> vote_msg s n h1 epoch pv1 \<longrightarrow> slashed_dbl s n"
     using diff slashed_dbl_def by fastforce
   have "\<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> slashed_dbl s n"
     by (simp add: ddr vv0 vv1)
@@ -1291,22 +1296,22 @@ qed
 
 
 lemma close_finalizations_cause_slashing_u_j :
-  " close_justification s r rE Usual h0 v m0 \<Longrightarrow>
-    close_justification s r rE Usual h1 v m1 \<Longrightarrow>
-   \<not> justified_with_root h0 v m0 s h1 v m1 \<Longrightarrow>
-   \<not> justified_with_root h1 v m1 s h0 v m0 \<Longrightarrow>
+  " close_justification s r rE Usual h0 epoch m0 \<Longrightarrow>
+    close_justification s r rE Usual h1 epoch m1 \<Longrightarrow>
+   \<not> justified_with_root h0 epoch m0 s h1 epoch m1 \<Longrightarrow>
+   \<not> justified_with_root h1 epoch m1 s h0 epoch m0 \<Longrightarrow>
     \<exists>q. one_third_of_fwd_or_bwd_slashed s r q"
 proof -
-  assume c0: "close_justification s r rE Usual h0 v m0"
-  assume c1: "close_justification s r rE Usual h1 v m1"
-  assume n01: "\<not> justified_with_root h0 v m0 s h1 v m1"
+  assume c0: "close_justification s r rE Usual h0 epoch m0"
+  assume c1: "close_justification s r rE Usual h1 epoch m1"
+  assume n01: "\<not> justified_with_root h0 epoch m0 s h1 epoch m1"
   then have not_same: "h0 \<noteq> h1 \<or> m0 \<noteq> m1"
     using justified_genesis by blast
-  have non_trivial: "rE \<noteq> v"
+  have non_trivial: "rE \<noteq> epoch"
     using c0 c1 not_same trivial_is_refl by blast
-  have v0: "\<exists> q0 p0 pv0. voted_by s q0 (vset_fwd r) p0 pv0 h0 v"
+  have v0: "\<exists> q0 p0 pv0. voted_by s q0 (vset_fwd r) p0 pv0 h0 epoch"
     using c0 close_involves_vote non_trivial by blast
-  have v1: "\<exists> q1 p1 pv1. voted_by s q1 (vset_fwd r) p1 pv1 h1 v"
+  have v1: "\<exists> q1 p1 pv1. voted_by s q1 (vset_fwd r) p1 pv1 h1 epoch"
     using c1 close_involves_vote non_trivial by blast
   have "m0 = m1"
     by (metis c0 c1 close_justification_era close_justification_mode_f close_justification_mode_u discrete le_neq_implies_less non_trivial)
@@ -1317,44 +1322,44 @@ proof -
 qed
 
 lemma close_fj :
-  "close_finalization s r rE rM h v m \<Longrightarrow>
-   close_justification s r rE rM h v m"
+  "close_finalization s r rE rM h epoch m \<Longrightarrow>
+   close_justification s r rE rM h epoch m"
   by(auto simp add: close_finalization_def close_justification_def fjn)
 
 lemma close_finalizations_cause_slashing_u_inner :
-  " close_finalization s r rE Usual h0 v m0 \<Longrightarrow>
-    close_finalization s r rE Usual h1 v m1 \<Longrightarrow>
-   \<not> justified_with_root h0 v m0 s h1 v m1 \<Longrightarrow>
-   \<not> justified_with_root h1 v m1 s h0 v m0 \<Longrightarrow>
+  " close_finalization s r rE Usual h0 epoch m0 \<Longrightarrow>
+    close_finalization s r rE Usual h1 epoch m1 \<Longrightarrow>
+   \<not> justified_with_root h0 epoch m0 s h1 epoch m1 \<Longrightarrow>
+   \<not> justified_with_root h1 epoch m1 s h0 epoch m0 \<Longrightarrow>
     \<exists>q. one_third_of_fwd_or_bwd_slashed s r q"
   by (meson casper.close_finalizations_cause_slashing_u_j casper.close_fj casper_axioms)
 
 lemma close_finalizations_cause_slashing_u :
-  " close_finalization s r rE Usual h0 v m0 \<Longrightarrow>
-    close_finalization s r rE Usual h1 v m1 \<Longrightarrow>
-   \<not> justified_with_root h0 v m0 s h1 v m1 \<Longrightarrow>
-   \<not> justified_with_root h1 v m1 s h0 v m0 \<Longrightarrow>
+  " close_finalization s r rE Usual h0 epoch m0 \<Longrightarrow>
+    close_finalization s r rE Usual h1 epoch m1 \<Longrightarrow>
+   \<not> justified_with_root h0 epoch m0 s h1 epoch m1 \<Longrightarrow>
+   \<not> justified_with_root h1 epoch m1 s h0 epoch m0 \<Longrightarrow>
    justified s r rE rM \<Longrightarrow>
     \<exists>q r'. (\<exists>rE'. Ex (justified s r' rE')) \<and> one_third_of_fwd_or_bwd_slashed s r' q"
   using close_finalizations_cause_slashing_u_inner by blast
 
 lemma close_finalizations_cause_slashing_f_chosen :
-  " close_finalization s r rE FinalizingChild h0 v m0 \<Longrightarrow>
-    close_finalization s r rE FinalizingChild h1 v m1 \<Longrightarrow>
-   \<not> justified_with_root h0 v m0 s h1 v m1 \<Longrightarrow>
-   \<not> justified_with_root h1 v m1 s h0 v m0 \<Longrightarrow>
+  " close_finalization s r rE FinalizingChild h0 epoch m0 \<Longrightarrow>
+    close_finalization s r rE FinalizingChild h1 epoch m1 \<Longrightarrow>
+   \<not> justified_with_root h0 epoch m0 s h1 epoch m1 \<Longrightarrow>
+   \<not> justified_with_root h1 epoch m1 s h0 epoch m0 \<Longrightarrow>
    \<exists> q. (\<forall> n. (n \<in>\<^sub>1 q of (vset_chosen r)) \<longrightarrow> slashed s n)"
 proof -
-  assume c0: "close_finalization s r rE FinalizingChild h0 v m0"
-  assume c1: "close_finalization s r rE FinalizingChild h1 v m1"
-  assume n01: "\<not> justified_with_root h0 v m0 s h1 v m1"
+  assume c0: "close_finalization s r rE FinalizingChild h0 epoch m0"
+  assume c1: "close_finalization s r rE FinalizingChild h1 epoch m1"
+  assume n01: "\<not> justified_with_root h0 epoch m0 s h1 epoch m1"
   then have not_same: "h0 \<noteq> h1 \<or> m0 \<noteq> m1"
     using justified_genesis by blast
-  have non_trivial: "rE \<noteq> v"
+  have non_trivial: "rE \<noteq> epoch"
     by (metis c0 c1 close_fj close_justification_is_justification n01 trivial_is_refl)
-  have v0: "\<exists> q0 p0 pv0. voted_by s q0 (vset_chosen r) p0 pv0 h0 v"
+  have v0: "\<exists> q0 p0 pv0. voted_by s q0 (vset_chosen r) p0 pv0 h0 epoch"
     by (meson c0 casper.close_involves_vote_f casper_axioms close_fj non_trivial)
-  have v1: "\<exists> q1 p1 pv1. voted_by s q1 (vset_chosen r) p1 pv1 h1 v"
+  have v1: "\<exists> q1 p1 pv1. voted_by s q1 (vset_chosen r) p1 pv1 h1 epoch"
     using c1 close_fj close_involves_vote_f non_trivial by blast
   have "m0 = m1"
     by (metis (no_types, lifting) One_nat_def add.right_neutral add_Suc_right c0 c1 close_fj close_justification_def close_justification_era le_less_Suc_eq linorder_neqE_nat non_trivial really_close_justification_zero)
@@ -1365,11 +1370,11 @@ proof -
 qed
 
 lemma find_first_change_one:
-   "justified_with_root_with_n_switchings n r rE rM s h0 v m0 \<Longrightarrow>
+   "justified_with_root_with_n_switchings n r rE rM s h0 epoch m0 \<Longrightarrow>
     justified s r rE rM \<Longrightarrow>
     n = Suc 0 \<Longrightarrow>
     rM = FinalizingChild \<Longrightarrow>
-    rE < v \<Longrightarrow>
+    rE < epoch \<Longrightarrow>
     \<exists>r'. (\<exists>rE' m. justified s r' rE' m) \<and> vset_fwd r' = vset_chosen r"
 proof(induct rule: justified_with_root_with_n_switchings.induct)
   case (justified_genesis_n r r' rE rE' mode mode' n s)
@@ -1393,11 +1398,11 @@ next
 qed
 
 lemma find_first_change_two:
-   "justified_with_root_with_n_switchings n r rE rM s h0 v m0 \<Longrightarrow>
+   "justified_with_root_with_n_switchings n r rE rM s h0 epoch m0 \<Longrightarrow>
     justified s r rE rM \<Longrightarrow>
     n = Suc (Suc 0) \<Longrightarrow>
     rM = FinalizingChild \<Longrightarrow>
-    rE < v \<Longrightarrow>
+    rE < epoch \<Longrightarrow>
     \<exists>r'. (\<exists>rE' m. justified s r' rE' m) \<and> vset_fwd r' = vset_chosen r"
 proof(induct rule: justified_with_root_with_n_switchings.induct)
   case (justified_genesis_n r r' rE rE' mode mode' n s)
@@ -1413,33 +1418,33 @@ next
 qed
 
 lemma close_finalizations_cause_slashing_f_chosen_becomes_inner :
-  " close_justification s r rE FinalizingChild h0 v m0 \<Longrightarrow>
+  " close_justification s r rE FinalizingChild h0 epoch m0 \<Longrightarrow>
     justified s r rE FinalizingChild \<Longrightarrow>
-    rE < v \<Longrightarrow>
+    rE < epoch \<Longrightarrow>
     \<exists>r'. (\<exists>rE'. Ex (justified s r' rE')) \<and> (vset_fwd r' = vset_chosen r)"
   by (smt One_nat_def casper.close_justification_def casper_axioms find_first_change_one find_first_change_two nat_neq_iff numeral_2_eq_2 zero_justification_f)
 
 lemma close_finalizations_cause_slashing_f_chosen_becomes :
-  " close_finalization s r rE FinalizingChild h0 v m0 \<Longrightarrow>
-    close_finalization s r rE FinalizingChild h1 v m1 \<Longrightarrow>
-   \<not> justified_with_root h0 v m0 s h1 v m1 \<Longrightarrow>
-   \<not> justified_with_root h1 v m1 s h0 v m0 \<Longrightarrow>
+  " close_finalization s r rE FinalizingChild h0 epoch m0 \<Longrightarrow>
+    close_finalization s r rE FinalizingChild h1 epoch m1 \<Longrightarrow>
+   \<not> justified_with_root h0 epoch m0 s h1 epoch m1 \<Longrightarrow>
+   \<not> justified_with_root h1 epoch m1 s h0 epoch m0 \<Longrightarrow>
    justified s r rE FinalizingChild \<Longrightarrow>
     \<exists>r'. (\<exists>rE'. Ex (justified s r' rE')) \<and> (vset_fwd r' = vset_chosen r)"
   by (smt Suc_eq_plus1 Suc_less_eq casper.close_justification_def casper_axioms close_finalizations_cause_slashing_f_chosen_becomes_inner close_fj close_justification_is_justification less_Suc_eq trivial_is_refl zero_justification_f)
 
 lemma close_finalizations_cause_slashing_f :
-  " close_finalization s r rE FinalizingChild h0 v m0 \<Longrightarrow>
-    close_finalization s r rE FinalizingChild h1 v m1 \<Longrightarrow>
-   \<not> justified_with_root h0 v m0 s h1 v m1 \<Longrightarrow>
-   \<not> justified_with_root h1 v m1 s h0 v m0 \<Longrightarrow>
+  " close_finalization s r rE FinalizingChild h0 epoch m0 \<Longrightarrow>
+    close_finalization s r rE FinalizingChild h1 epoch m1 \<Longrightarrow>
+   \<not> justified_with_root h0 epoch m0 s h1 epoch m1 \<Longrightarrow>
+   \<not> justified_with_root h1 epoch m1 s h0 epoch m0 \<Longrightarrow>
    justified s r rE FinalizingChild \<Longrightarrow>
     \<exists>q r'. (\<exists>rE'. Ex (justified s r' rE')) \<and> one_third_of_fwd_or_bwd_slashed s r' q"
 proof -
-  assume a0: "close_finalization s r rE FinalizingChild h0 v m0"
-  assume a1: "close_finalization s r rE FinalizingChild h1 v m1"
-  assume j0: "\<not> justified_with_root h0 v m0 s h1 v m1"
-  assume j1: "\<not> justified_with_root h1 v m1 s h0 v m0"
+  assume a0: "close_finalization s r rE FinalizingChild h0 epoch m0"
+  assume a1: "close_finalization s r rE FinalizingChild h1 epoch m1"
+  assume j0: "\<not> justified_with_root h0 epoch m0 s h1 epoch m1"
+  assume j1: "\<not> justified_with_root h1 epoch m1 s h0 epoch m0"
   assume j: "justified s r rE FinalizingChild"
   obtain r' where r'P: "(\<exists>rE'. Ex (justified s r' rE')) \<and> (vset_fwd r' = vset_chosen r)"
     using a0 a1 close_finalizations_cause_slashing_f_chosen_becomes j j0 j1 by blast
@@ -1456,10 +1461,10 @@ proof -
 qed
 
 lemma close_finalizations_cause_slashing :
-  "close_finalization s r rE rM h0 v m0 \<Longrightarrow>
-   close_finalization s r rE rM h1 v m1 \<Longrightarrow>
-   \<not> justified_with_root h0 v m0 s h1 v m1 \<Longrightarrow>
-   \<not> justified_with_root h1 v m1 s h0 v m0 \<Longrightarrow>
+  "close_finalization s r rE rM h0 epoch m0 \<Longrightarrow>
+   close_finalization s r rE rM h1 epoch m1 \<Longrightarrow>
+   \<not> justified_with_root h0 epoch m0 s h1 epoch m1 \<Longrightarrow>
+   \<not> justified_with_root h1 epoch m1 s h0 epoch m0 \<Longrightarrow>
    justified s r rE rM \<Longrightarrow>
    \<exists> q r' rE' rM'. justified s r' rE' rM' \<and> one_third_of_fwd_or_bwd_slashed s r' q"
   apply(cases rM; clarsimp)
@@ -1467,17 +1472,17 @@ lemma close_finalizations_cause_slashing :
   by (simp add: close_finalizations_cause_slashing_f)
 
 lemma small_accountable_safety_equal :
-  "small_fork s r rE rM h0 v m0 h1 v m1 \<Longrightarrow>
+  "small_fork s r rE rM h0 epoch m0 h1 epoch m1 \<Longrightarrow>
    \<exists> q r' rE' rM' . justified s r' rE' rM' \<and> one_third_of_fwd_or_bwd_slashed s r' q"
 proof -
-  assume a: "small_fork s r rE rM h0 v m0 h1 v m1"
-  have dif0: "\<not> justified_with_root h0 v m0 s h1 v m1"
+  assume a: "small_fork s r rE rM h0 epoch m0 h1 epoch m1"
+  have dif0: "\<not> justified_with_root h0 epoch m0 s h1 epoch m1"
     using a casper.justification_fork_with_root_def casper.small_fork_def casper_axioms by fastforce
-  have dif1: "\<not> justified_with_root h1 v m1 s h0 v m0"
+  have dif1: "\<not> justified_with_root h1 epoch m1 s h0 epoch m0"
     using a casper.small_fork_def casper_axioms justification_fork_with_root_def by fastforce
-  have c0: "close_finalization s r rE rM h0 v m0"
+  have c0: "close_finalization s r rE rM h0 epoch m0"
     by (meson a casper.small_fork_has_close_justification casper_axioms)
-  have c1: "close_finalization s r rE rM h1 v m1"
+  have c1: "close_finalization s r rE rM h1 epoch m1"
     using a small_fork_has_close_justification small_fork_sym by blast
   have j: "justified s r rE rM"
     using a casper.small_fork_def casper_axioms justification_fork_with_root_def by fastforce
@@ -1486,10 +1491,10 @@ proof -
 qed
 
 lemma finalized_zero_has_child:
-  "finalized_with_root_with_n_switchings n r rE rM s h1 child v1 m1 \<Longrightarrow>
+  "finalized_with_root_with_n_switchings n r rE rM s h1 child epoch1 m1 \<Longrightarrow>
    n = 0 \<Longrightarrow>
    rM = Usual \<Longrightarrow>
-   \<exists>q1 ch1. voted_by s q1 (vset_fwd r) h1 v1 ch1 (Suc v1)"
+   \<exists>q1 ch1. voted_by s q1 (vset_fwd r) h1 epoch1 ch1 (Suc epoch1)"
 proof(induct rule: finalized_with_root_with_n_switchings.induct)
   case (under_usual_link_n n r rE mode s orig origE q0 q1 new)
   then have v: "\<exists>q1. voted_by s q1 (vset_fwd new) orig origE new (Suc origE)"
@@ -1512,12 +1517,12 @@ next
 qed
 
 lemma finalized_one_has_child:
-  "finalized_with_root_with_n_switchings n r rE rM s h1 child v1 m1 \<Longrightarrow>
+  "finalized_with_root_with_n_switchings n r rE rM s h1 child epoch1 m1 \<Longrightarrow>
    m1 = Usual \<Longrightarrow>
    rM = Usual \<Longrightarrow>
    n = Suc 0 \<Longrightarrow>
-   rE < v1 \<Longrightarrow>
-   \<exists>q1 ch1. voted_by s q1 (vset_fwd r) h1 v1 ch1 (Suc v1)"
+   rE < epoch1 \<Longrightarrow>
+   \<exists>q1 ch1. voted_by s q1 (vset_fwd r) h1 epoch1 ch1 (Suc epoch1)"
 proof(induct rule: finalized_with_root_with_n_switchings.induct)
   case (under_usual_link_n n r rE mode s orig origE q0 q1 new)
   then show ?case
@@ -1528,9 +1533,9 @@ next
 qed
 
 lemma finalized_ending_u:
-  "finalized_with_root_with_n_switchings n r rE rM s h1 child v1 m1 \<Longrightarrow>
+  "finalized_with_root_with_n_switchings n r rE rM s h1 child epoch1 m1 \<Longrightarrow>
    m1 = Usual \<Longrightarrow>
-   \<exists>q0 q1. usual_link s q0 q1 h1 v1 child (Suc v1)"
+   \<exists>q0 q1. usual_link s q0 q1 h1 epoch1 child (Suc epoch1)"
 proof(induct rule: finalized_with_root_with_n_switchings.induct)
   case (under_usual_link_n n r rE mode s orig origE q0 q1 new)
   then show ?case
@@ -1541,9 +1546,9 @@ next
 qed
 
 lemma finalized_ending_f:
-  "finalized_with_root_with_n_switchings n r rE rM s h1 child v1 m1 \<Longrightarrow>
+  "finalized_with_root_with_n_switchings n r rE rM s h1 child epoch1 m1 \<Longrightarrow>
    m1 = FinalizingChild \<Longrightarrow>
-   \<exists>q0 q1. validator_changing_link s q0 q1 h1 v1 child (Suc v1)"
+   \<exists>q0 q1. validator_changing_link s q0 q1 h1 epoch1 child (Suc epoch1)"
 proof(induct rule: finalized_with_root_with_n_switchings.induct)
   case (under_usual_link_n n r rE mode s orig origE q0 q1 new)
   then show ?case by blast
@@ -1554,9 +1559,9 @@ qed
 
 (* think about adding a ch argument to close_finalization *)
 lemma close_finalization_has_child_usually_linked:
-"close_finalization s r rE rM h1 v1 m1 \<Longrightarrow>
+"close_finalization s r rE rM h1 epoch1 m1 \<Longrightarrow>
  m1 = Usual \<Longrightarrow>
- \<exists> q0 q1 ch1. usual_link s q0 q1 h1 v1 ch1 (v1 + 1)"
+ \<exists> q0 q1 ch1. usual_link s q0 q1 h1 epoch1 ch1 (epoch1 + 1)"
   apply(auto simp add: close_finalization_def)
   using finalized_ending_u apply blast
     apply (meson casper.finalized_ending_u casper_axioms)
@@ -1564,47 +1569,48 @@ lemma close_finalization_has_child_usually_linked:
   by (meson casper.finalized_ending_u casper_axioms)
 
 lemma close_finalization_has_child_changing_linked:
-"close_finalization s r rE rM h1 v1 m1 \<Longrightarrow>
+"close_finalization s r rE rM h1 epoch1 m1 \<Longrightarrow>
  m1 = FinalizingChild \<Longrightarrow>
- \<exists> q0 q1 ch1. validator_changing_link s q0 q1 h1 v1 ch1 (v1 + 1)"
-  by (smt Suc_eq_plus1 Suc_lessD Suc_lessI casper.close_finalization_def casper_axioms close_fj close_justification_era diff_add_inverse finalized_ending_f order_le_less)
+ \<exists> q0 q1 ch1. validator_changing_link s q0 q1 h1 epoch1 ch1 (epoch1 + 1)"
+  by (smt Suc_eq_plus1 Suc_lessD Suc_lessI casper.close_finalization_def
+      casper_axioms close_fj close_justification_era diff_add_inverse finalized_ending_f order_le_less)
 
 lemma close_finalization_has_child:
-"close_finalization s r rE rM h1 v1 m1 \<Longrightarrow>
+"close_finalization s r rE rM h1 epoch1 m1 \<Longrightarrow>
  rM = Usual \<Longrightarrow>
- \<exists> q1 ch1. voted_by s q1 (vset_fwd r) h1 v1 ch1 (v1 + 1)"
+ \<exists> q1 ch1. voted_by s q1 (vset_fwd r) h1 epoch1 ch1 (epoch1 + 1)"
 by (smt Mode.simps(1) One_nat_def Suc_eq_plus1 Suc_lessI casper.close_finalization_def casper_axioms finalized_one_has_child finalized_zero_has_child)
 
 lemma surround_concrete:
   "voted_by s q0 vset orig origE new newE \<Longrightarrow>
-   voted_by s q1 vset h1 v1 ch1 chE \<Longrightarrow>
-   origE < v1 \<Longrightarrow>
+   voted_by s q1 vset h1 epoch1 ch1 chE \<Longrightarrow>
+   origE < epoch1 \<Longrightarrow>
    chE < newE \<Longrightarrow>
    \<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> slashed s n"
 proof -
   assume v0: "voted_by s q0 vset orig origE new newE"
-  assume v1: "voted_by s q1 vset h1 v1 ch1 chE"
+  assume v1: "voted_by s q1 vset h1 epoch1 ch1 chE"
   have both: "\<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> (n \<in>\<^sub>2 q0 of vset) \<and> (n \<in>\<^sub>2 q1 of vset)"
     by (metis byz_quorums_axioms byz_quorums_def)
   then obtain q where qP: "\<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> (n \<in>\<^sub>2 q0 of vset) \<and> (n \<in>\<^sub>2 q1 of vset)"
     by blast
   have vote0: "\<forall> n.  (n \<in>\<^sub>1 q of vset) \<longrightarrow> vote_msg s n new newE origE"
     by (meson casper.voted_by_def casper_axioms qP v0)
-  have vote1: "\<forall> n.  (n \<in>\<^sub>1 q of vset) \<longrightarrow> vote_msg s n ch1 chE v1"
+  have vote1: "\<forall> n.  (n \<in>\<^sub>1 q of vset) \<longrightarrow> vote_msg s n ch1 chE epoch1"
     by (meson casper.voted_by_def casper_axioms qP v1)
-  assume orig_v1: " origE < v1"
+  assume orig_v1: " origE < epoch1"
   assume ch_new: "chE < newE"
   show ?thesis
     by (meson ch_new orig_v1 slashed_def slashed_surround_def v1 vote0 vote1 voted_by_higher)
 qed
 
 lemma close_j_f_u_zero:
-   "justified_with_root_with_n_switchings n r rE rM s h0 v0 m0 \<Longrightarrow>
-    close_finalization s r rE rM h1 v1 m1 \<Longrightarrow>
+   "justified_with_root_with_n_switchings n r rE rM s h0 epoch0 m0 \<Longrightarrow>
+    close_finalization s r rE rM h1 epoch1 m1 \<Longrightarrow>
     n = 0 \<Longrightarrow>
     rM = Usual \<Longrightarrow>
-    v1 < v0 \<Longrightarrow>
-    \<not> justified_with_root h1 v1 m1 s h0 v0 m0 \<Longrightarrow>
+    epoch1 < epoch0 \<Longrightarrow>
+    \<not> justified_with_root h1 epoch1 m1 s h0 epoch0 m0 \<Longrightarrow>
     justified s r rE Usual \<Longrightarrow>
     \<exists>q r'. (\<exists>rE'. Ex (justified s r' rE')) \<and> one_third_of_fwd_or_bwd_slashed s r' q"
 proof(induct rule: justified_with_root_with_n_switchings.induct)
@@ -1613,8 +1619,8 @@ proof(induct rule: justified_with_root_with_n_switchings.induct)
     using close_fj close_justification_era leD by blast
 next
   case (usual_justification_n n r rE mode s orig origE origM q0 q1 new newE newM)
-  then have f1: "close_finalization s r rE mode h1 v1 m1" by blast
-  consider (a) "origE > v1" | (b) "origE = v1" | (c) "origE < v1"
+  then have f1: "close_finalization s r rE mode h1 epoch1 m1" by blast
+  consider (a) "origE > epoch1" | (b) "origE = epoch1" | (c) "origE < epoch1"
     using antisym_conv3 by blast
   then show ?case
   proof cases
@@ -1627,7 +1633,7 @@ next
       by (metis b casper.justifies_higher casper.trivial_is_refl casper.usual_justification_n casper_axioms close_fj forget_n_switchings le_neq_implies_less usual_justification_n.hyps(1) usual_justification_n.hyps(3) usual_justification_n.hyps(4) usual_justification_n.hyps(5) usual_justification_n.prems(1) usual_justification_n.prems(5))
     have v0: "\<exists> q0 p0 pv0. voted_by s q0 (vset_fwd r) p0 pv0 orig origE"
       by (metis orignt nat_neq_iff usual_justification_n.hyps(1) usual_justification_n.prems(2) usual_justification_n.prems(3) zero_switching_involves_root_vote)
-    have v1: "\<exists> q1 p1 pv1. voted_by s q1 (vset_fwd r) p1 pv1 h1 v1"
+    have v1: "\<exists> q1 p1 pv1. voted_by s q1 (vset_fwd r) p1 pv1 h1 epoch1"
       by (smt b casper.trivial_is_refl casper_axioms close_fj close_involves_vote trivial_is_refl0 usual_justification_n.hyps(1) usual_justification_n.prems(1) usual_justification_n.prems(2) usual_justification_n.prems(3) v0)
     have diff: "orig \<noteq> h1"
       by (metis Mode.simps(1) Suc_eq_plus1 Suc_lessI b casper.justified_genesis casper.usual_justification casper_axioms close_finalization_def orignt really_close_justification_zero usual_justification_n.hyps(1) usual_justification_n.hyps(3) usual_justification_n.hyps(4) usual_justification_n.hyps(5) usual_justification_n.prems(1) usual_justification_n.prems(5))
@@ -1638,11 +1644,11 @@ next
   next
     case c
     then show ?thesis
-    proof(cases "newE > v1 + 1")
+    proof(cases "newE > epoch1 + 1")
       case True (* surrounding rule *)
       have v0: "\<exists> q0. voted_by s q0 (vset_fwd r) orig origE new newE"
         by (metis usual_justification_n.hyps(1) usual_justification_n.hyps(4) usual_justification_n.prems(2) usual_justification_n.prems(3) usual_link_def voted_by_both_def voted_by_fwd_def zero_switching_means)
-      have v1: "\<exists> q1 ch1. voted_by s q1 (vset_fwd r) h1 v1 ch1 (v1 + 1)"
+      have v1: "\<exists> q1 ch1. voted_by s q1 (vset_fwd r) h1 epoch1 ch1 (epoch1 + 1)"
         using casper.close_finalization_has_child casper_axioms usual_justification_n.prems(1) usual_justification_n.prems(3) by fastforce
       have sl: "\<exists> q. \<forall> n. (n \<in>\<^sub>1 q of (vset_fwd r)) \<longrightarrow> slashed s n"
         using True c surround_concrete v0 v1 by blast
@@ -1659,20 +1665,20 @@ next
       show ?thesis
       proof(cases m1)
         case Usual
-        have "close_finalization s r rE mode h1 v1 m1" using f1 by blast
-        have v1: "\<exists> q0 q1 ch1. usual_link s q0 q1 h1 v1 ch1 (v1 + 1)"
+        have "close_finalization s r rE mode h1 epoch1 m1" using f1 by blast
+        have v1: "\<exists> q0 q1 ch1. usual_link s q0 q1 h1 epoch1 ch1 (epoch1 + 1)"
           using Usual close_finalization_has_child_usually_linked usual_justification_n.prems(1) by blast
-        then obtain ch1 q0 q1 where ch1P: "usual_link s q0 q1 h1 v1 ch1 (v1 + 1)"
+        then obtain ch1 q0 q1 where ch1P: "usual_link s q0 q1 h1 epoch1 ch1 (epoch1 + 1)"
           by blast
-        then have v_fwd: "voted_by s q0 (vset_fwd ch1) h1 v1 ch1 (v1 + 1)"
+        then have v_fwd: "voted_by s q0 (vset_fwd ch1) h1 epoch1 ch1 (epoch1 + 1)"
           by (simp add: usual_link_def voted_by_both_def voted_by_fwd_def)
-        have eq: "newE = v1 + 1"
+        have eq: "newE = epoch1 + 1"
           using False usual_justification_n.prems(4) by auto
         have v_0: "\<exists> q2 q3. usual_link s q2 q3 orig origE new newE"
           using usual_justification_n.hyps(4) by blast
         then obtain q2 q3 where q23P: "usual_link s q2 q3 orig origE new newE"
           by blast
-        have vr1: "\<exists> q. voted_by s q (vset_fwd r) h1 v1 ch1 (v1 + 1)"
+        have vr1: "\<exists> q. voted_by s q (vset_fwd r) h1 epoch1 ch1 (epoch1 + 1)"
           by (metis Mode.simps(1) One_nat_def casper.close_justification_def casper.zero_switching_means casper_axioms ch1P close_fj one_switching_means usual_justification_n.prems(1) usual_justification_n.prems(3) usual_link_def v_fwd voted_by_both_def voted_by_bwd_def)
         have vr0: "\<exists> q. voted_by s q (vset_fwd r) orig origE new newE"
           by (simp add: v0)
@@ -1684,20 +1690,20 @@ next
           using usual_justification_n.prems(6) by blast
       next
         case FinalizingChild
-        have "close_finalization s r rE mode h1 v1 m1" using f1 by blast
-        have v1: "\<exists> q0 q1 ch1. validator_changing_link s q0 q1 h1 v1 ch1 (v1 + 1)"
+        have "close_finalization s r rE mode h1 epoch1 m1" using f1 by blast
+        have v1: "\<exists> q0 q1 ch1. validator_changing_link s q0 q1 h1 epoch1 ch1 (epoch1 + 1)"
           using FinalizingChild close_finalization_has_child_changing_linked usual_justification_n.prems(1) by blast
-        then obtain ch1 q0 q1 where ch1P: "validator_changing_link s q0 q1 h1 v1 ch1 (v1 + 1)"
+        then obtain ch1 q0 q1 where ch1P: "validator_changing_link s q0 q1 h1 epoch1 ch1 (epoch1 + 1)"
           by blast
-        then have v_bwd: "voted_by s q1 (vset_bwd ch1) h1 v1 ch1 (v1 + 1)"
+        then have v_bwd: "voted_by s q1 (vset_bwd ch1) h1 epoch1 ch1 (epoch1 + 1)"
           using validator_changing_link_def voted_by_both_def voted_by_bwd_def by blast
-        have eq: "newE = v1 + 1"
+        have eq: "newE = epoch1 + 1"
           using False usual_justification_n.prems(4) by auto
         have v_0: "\<exists> q2 q3. usual_link s q2 q3 orig origE new newE"
           using usual_justification_n.hyps(4) by blast
         then obtain q2 q3 where q23P: "usual_link s q2 q3 orig origE new newE"
           by blast
-        have vr1: "\<exists> q. voted_by s q (vset_fwd r) h1 v1 ch1 (v1 + 1)"
+        have vr1: "\<exists> q. voted_by s q (vset_fwd r) h1 epoch1 ch1 (epoch1 + 1)"
           by (smt FinalizingChild Mode.simps(1) One_nat_def add.right_neutral add_Suc_right casper.close_justification_def casper.zero_switching_means casper_axioms ch1P close_fj diff_add_inverse2 less_Suc_eq less_diff_conv usual_justification_n.prems(1) usual_justification_n.prems(3) v_bwd validator_changing_link_def)
         have vr0: "\<exists> q. voted_by s q (vset_fwd r) orig origE new newE"
           by (simp add: v0)
@@ -1716,11 +1722,11 @@ next
 qed
 
 lemma finalizing_justification_is_like_inner_u0:
-  "justified_with_root_with_n_switchings n r rE rM s h1 v1 m1 \<Longrightarrow>
-   rE < v1 \<Longrightarrow>
+  "justified_with_root_with_n_switchings n r rE rM s h1 epoch1 m1 \<Longrightarrow>
+   rE < epoch1 \<Longrightarrow>
    m1 = Usual \<Longrightarrow>
    n = 0 \<Longrightarrow>
-  \<exists> q v1_src h1_src. voted_by s q (vset_fwd r) h1_src v1_src h1 v1 \<and> v1_src + 1 < v1"
+  \<exists> q v1_src h1_src. voted_by s q (vset_fwd r) h1_src v1_src h1 epoch1 \<and> v1_src + 1 < epoch1"
 proof(induct rule: justified_with_root_with_n_switchings.induct)
   case (justified_genesis_n r r' rE rE' mode mode' n s)
   then show ?case
@@ -2795,20 +2801,21 @@ qed
 
 
 lemma justification_fork_to_small:
-  "justification_fork_with_root s r rE rM h0 v0 m0 h1 v1 m1 \<Longrightarrow>
-   \<exists> r' rE' rM' h0' v0' m0' h1' v1' m1'.
-     small_fork s r' rE' rM' h0' v0' m0' h1' v1' m1'"
-proof(induct "v0 + v1 - rE" arbitrary: r rE rM h0 v0 m0 h1 v1 m1 rule: less_induct)
+  "justification_fork_with_root s r rE rM h0 epoch0 m0 h1 epoch1 m1 \<Longrightarrow>
+   \<exists> r' rE' rM' h0' epoch0' m0' h1' epoch1' m1'.
+     small_fork s r' rE' rM' h0' epoch0' m0' h1' epoch1' m1'"
+proof(induct "epoch0 + epoch1 - rE" arbitrary: r rE rM h0 epoch0 m0 h1 epoch1 m1 rule: less_induct)
   case less
   then show ?case
-  proof (cases "\<exists> r' rE' rM' h0' v0' m0' h1' v1' m1'. v0' + v1' - rE' < v0 + v1 - rE \<and>
-                justification_fork_with_root s r' rE' rM' h0' v0' m0' h1' v1' m1'")
+  proof (cases "\<exists> r' rE' rM' h0' epoch0' m0' h1' epoch1' m1'.
+                epoch0' + epoch1' - rE' < epoch0 + epoch1 - rE \<and>
+                justification_fork_with_root s r' rE' rM' h0' epoch0' m0' h1' epoch1' m1'")
     case True
     then show ?thesis
       using less.hyps by blast
   next
     case False
-    then have "small_fork s r rE rM h0 v0 m0 h1 v1 m1"
+    then have "small_fork s r rE rM h0 epoch0 m0 h1 epoch1 m1"
       by (simp add: less.prems small_fork_def)
     then show ?thesis by blast
   qed
