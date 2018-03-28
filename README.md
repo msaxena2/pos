@@ -15,6 +15,7 @@ Isabelle2017 should work.
 ### On the Newest Casper Design
 
 * [`DynamicValidatorSetOneMessage.thy`](DynamicValidatorSetOneMessage.thy) is about one-message Casper (newer) with a dynamic validator set (more realistic), and proves accountable safety (not plausible liveness).
+    * [`StraightforwardInterpretation.thy`](StraightforwardInterpretation.thy) is one simple instantiation with five fixed validators.
 
 * [`CasperOneMessage.thy`](CasperOneMessage.thy) is about one-message Casper (newer) with a static validator set (unrealistic), and proves accountable safety (not plausible liveness).
 
