@@ -11,8 +11,13 @@ begin
 
 (* I need member_1, member_2 and hash_parent *)
 
+axiomatization validators:: "int set"
+  where five: "card validators = 5"
+
+(*
 definition validators :: "int set" where
 "validators = {1, 2, 3, 4, 5}"
+*)
 
 definition powset :: "int set set" where
 "powset = Pow validators"
@@ -29,7 +34,7 @@ lemma validators_is_in_powset : "validators \<in> powset"
   by(auto simp add: powset_def)
 
 lemma more_than_four_validators : "4 \<le> card validators"
-  by(simp add: validators_def)
+  by (simp add: five)
 
 typedef big_quorum = "{ s | s. s \<in> powset \<and> card s \<ge> 4 }"
   apply(rule_tac x = validators in exI; auto)
@@ -42,7 +47,7 @@ definition member_2 :: "int \<Rightarrow> big_quorum \<Rightarrow> int set \<Rig
 typedef small_quorum = "{ s | s. s \<in> powset \<and> card s \<ge> 2 }"
   apply(rule_tac x = validators in exI; auto)
    apply (simp add: validators_is_in_powset)
-  by(simp add: validators_def)
+  by (simp add: five)
 
 definition member_1 :: "int \<Rightarrow> small_quorum \<Rightarrow> int set \<Rightarrow> bool" where
 "member_1 v sq whole \<equiv> (whole = validators \<and> v \<in> Rep_small_quorum sq)"
@@ -75,12 +80,10 @@ lemma quorum_union_is_still_validators:
   "(Rep_big_quorum bq1 \<union> Rep_big_quorum bq2) \<subseteq> validators"
   using Rep_big_quorum powset_def by auto
 
-lemma card_validators: "card validators = 5"
-  by (simp add: validators_def)
 
 lemma quorum_union_is_small:
   "card (Rep_big_quorum bq1 \<union> Rep_big_quorum bq2) \<le> 5"
-  by (metis card.infinite card_mono card_validators quorum_union_is_still_validators rel_simps(76))
+  by (metis card.infinite card_mono five quorum_union_is_still_validators rel_simps(76))
 
 lemma each_big_is_big: "4 \<le> card (Rep_big_quorum bq1)"
   using Rep_big_quorum by blast
