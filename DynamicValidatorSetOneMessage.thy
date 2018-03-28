@@ -142,13 +142,8 @@ definition voted_by where
      epoch1 \<noteq> 0 \<and> epoch2 < epoch1 \<and> nth_parent (epoch1 - epoch2) orig h \<and>
      (\<forall> v. (v \<in>\<^sub>2 bq of vset) \<longrightarrow> vote_msg s v h epoch1 epoch2)"
 
-(* the forward set and the backward set must be taken from orig, not from h.
- * Otherwise, there is a forking situation.
- *)
 
-(* The above comment is conflict against the following code
-   as well as the whitepaper. The code is compatible with the whitepaper.
-   The forward and backward sets should be taken from the target checkpoints *)
+(* The forward and backward sets should be taken from the target checkpoints *)
 
 definition voted_by_fwd where
   "voted_by_fwd s bq orig epoch2 h epoch1 \<equiv>
