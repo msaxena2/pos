@@ -74,7 +74,7 @@ current forward set, (and the forward set will become the backward set, by
 definition).
 "
 
-locale byz_quorums =
+locale casper =
   -- "Here we fix two types @{typ 'big_quorum} and @{typ 'small_quorum} for quorums and one type @{typ 'vpool} for
       validator sets. of cardinality greater than 2/3 of 
 the validators and quorum of cardinality greater than 1/3 of the validators."
@@ -124,7 +124,7 @@ record ('validator,'h) state =
   -- "vote_msg validator hash view view_src"
   vote_msg :: "'validator \<Rightarrow> 'h \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool"
 
-locale casper = byz_quorums
+context casper
 
 begin
 
@@ -593,7 +593,7 @@ next
   obtain mid1 where m1: "nth_parent n r1 mid1 \<and> mid1 \<leftarrow> h"
     using Suc.prems(2) nth_parent.simps by blast
   have u: "mid0 = mid1"
-    by (metis byz_quorums_axioms byz_quorums_def m0 m1)
+    by (metis casper_axioms casper_def m0 m1)
   then show ?case
     using Suc.hyps m0 m1 by blast
 qed
@@ -994,21 +994,7 @@ next
   next
   case (justified_on_finalization r rE mode s c e q0 q1 h ee newM)
   then have "close_justification s r rE mode c e FinalizingChild"
-  proof -
-    obtain nn :: nat and eea :: 'e and mm :: Mode and eeb :: 'e where
-      "(\<exists>epoch0 epoch1 epoch2 epoch3. (rE \<noteq> epoch2 \<and> epoch2 \<noteq> e \<and> justified_with_root r rE mode s epoch0 epoch2 epoch3 \<and> justified_with_root epoch0 epoch2 epoch3 s c e FinalizingChild) \<and> finalized_with_root r rE mode s epoch0 epoch1 epoch2 epoch3) = ((rE \<noteq> nn \<and> nn \<noteq> e \<and> justified_with_root r rE mode s eea nn mm \<and> justified_with_root eea nn mm s c e FinalizingChild) \<and> finalized_with_root r rE mode s eea eeb nn mm)"
-      by blast
-    moreover
-    { assume "justified_with_root eea nn mm s h ee (if ee - e = 1 then FinalizingChild else Usual)"
-      moreover
-      { assume "\<not> nn \<le> ee \<or> nn = ee"
-        then have "(rE = nn \<or> nn = e \<or> \<not> justified_with_root r rE mode s eea nn mm \<or> \<not> justified_with_root eea nn mm s c e FinalizingChild) \<or> \<not> finalized_with_root r rE mode s eea eeb nn mm"
-          by (meson justifies_higher le_less_trans local.justified_on_finalization(3) order.strict_iff_order validator_changing_link_higher) }
-      ultimately have "(rE = nn \<or> nn = e \<or> \<not> justified_with_root r rE mode s eea nn mm \<or> \<not> justified_with_root eea nn mm s c e FinalizingChild) \<or> \<not> finalized_with_root r rE mode s eea eeb nn mm"
-        using justified_on_finalization.hyps(4) justified_on_finalization.prems by blast }
-    ultimately show ?thesis
-      using justified_with_root.justified_on_finalization local.justified_on_finalization(2) local.justified_on_finalization(3) by blast
-  qed
+    by (smt justified_with_root.justified_on_finalization justifies_higher le_less_Suc_eq less_Suc_eq validator_changing_link_higher)
   then consider (a) "justified_with_root_with_n_switchings (0 :: nat) r rE mode s c e FinalizingChild" |
     (b) "justified_with_root_with_n_switchings (1 :: nat) r rE mode s c e FinalizingChild \<and> rE < e \<and> (rE + 1 = e \<longrightarrow> vset_fwd c = vset_chosen r)" |
     (c) "justified_with_root_with_n_switchings (2 :: nat) r rE mode s c e FinalizingChild \<and> rE + 1 < e \<and> vset_bwd c = vset_chosen r \<and> mode = FinalizingChild"
@@ -1042,7 +1028,7 @@ next
         have "\<forall>x0 x10 x11 x12 x13 x14 x16 x1 x4 x6 x7 x8 x9. casper.justified_with_root_with_n_switchings (x16::'a \<Rightarrow> 'b \<Rightarrow> 'c \<Rightarrow> bool) x14 x13 x12 x11 (Suc x10) x9 x8 x7 (x6::(_, 'e, 'f) state_scheme) x1 x0 (if x0 - x4 = 1 then FinalizingChild else Usual) = (if x0 - x4 = 1 then casper.justified_with_root_with_n_switchings x16 x14 x13 x12 x11 (Suc x10) x9 x8 x7 x6 x1 x0 FinalizingChild else casper.justified_with_root_with_n_switchings x16 x14 x13 x12 x11 (Suc x10) x9 x8 x7 x6 x1 x0 Usual)"
           by presburger
         then have "justified_with_root_with_n_switchings (Suc 1) r rE mode s h ee FinalizingChild"
-          by (meson True b casper.justified_with_root_with_n_switchings.intros(3) casper_axioms justified_on_finalization.hyps(3))
+          by (smt True b casper.justified_with_root_with_n_switchings.intros(3) casper_axioms justified_on_finalization.hyps(3))
         then show ?thesis
           by (metis Suc_1)
       qed
@@ -1418,7 +1404,7 @@ proof -
   assume v0: "voted_by s q0 vset p0 pv0 h0 epoch"
   assume v1: "voted_by s q1 vset p1 pv1 h1 epoch"
   have "\<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> (n \<in>\<^sub>2 q0 of vset) \<and> (n \<in>\<^sub>2 q1 of vset)"
-    by (metis byz_quorums_axioms byz_quorums_def)
+    by (metis casper_axioms casper_def)
   then obtain q where qP: "\<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> (n \<in>\<^sub>2 q0 of vset) \<and> (n \<in>\<^sub>2 q1 of vset)"
     by blast
   have vv0: "\<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> vote_msg s n h0 epoch pv0"
@@ -1731,7 +1717,7 @@ proof -
   assume v0: "voted_by s q0 vset orig origE new newE"
   assume v1: "voted_by s q1 vset h1 epoch1 ch1 chE"
   have both: "\<exists> q. \<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> (n \<in>\<^sub>2 q0 of vset) \<and> (n \<in>\<^sub>2 q1 of vset)"
-    by (metis byz_quorums_axioms byz_quorums_def)
+    by (metis casper_axioms casper_def)
   then obtain q where qP: "\<forall> n. (n \<in>\<^sub>1 q of vset) \<longrightarrow> (n \<in>\<^sub>2 q0 of vset) \<and> (n \<in>\<^sub>2 q1 of vset)"
     by blast
   have vote0: "\<forall> n.  (n \<in>\<^sub>1 q of vset) \<longrightarrow> vote_msg s n new newE origE"
