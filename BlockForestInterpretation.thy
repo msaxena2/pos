@@ -179,9 +179,77 @@ definition allChains :: "blockForest \<Rightarrow> blockchain set"
 definition goodChains :: "blockForest \<Rightarrow> blockchain set"
   where "goodChains bf = allChains bf \<inter> { c. goodChain c }"
 
+(* Casper states from Casper.v *)
+
+record epochData =
+  epoch_target_hash :: hash
+  epoch_voted :: "validatorIndex list"
+  epoch_curr_dyn_votes :: "epoch \<Rightarrow> wei option"
+  epoch_prev_dyn_votes :: "epoch \<Rightarrow> wei option"
+  epoch_is_justified :: bool
+  epoch_is_finalized :: bool
+
+record validatorData =
+  validator_addr :: address
+  validator_withdrawal_addr :: address
+  validator_deposit :: "epoch \<Rightarrow> wei option"
+  validator_start_dynasty :: "dynasty"
+  validator_end_dynasty :: "dynasty"
+
+record casperData =
+  casper_epochs :: "epoch \<Rightarrow> epochData option"
+  casper_validators :: "validatorIndex \<Rightarrow> validatorData option"
+  casper_current_dynasty :: dynasty
+  casper_current_epoch :: epoch
+  casper_expected_target_hash :: hash
+  casper_expected_source_epoch :: epoch
+  casper_last_justified_epoch :: epoch
+  casper_last_finalized_epoch :: epoch
+  casper_dynasty_start_epoch :: "dynasty \<Rightarrow> epoch option"
+  casper_total_curr_dyn_deposits :: wei
+  casper_total_prev_dyn_deposits :: wei
+  casper_block_number :: nat
+  casper_next_validator_index :: validatorIndex
+
+
+
+definition initCasperData :: casperData
+  where
+"initCasperData = \<lparr>
+  casper_epochs = Map.empty,
+  casper_validators = Map.empty,
+  casper_current_dynasty = 0,
+  casper_current_epoch = 0,
+  casper_expected_target_hash = # GenesisBlock,
+  casper_expected_source_epoch = 0,
+  casper_last_justified_epoch = 0,
+  casper_last_finalized_epoch = 0,
+  casper_dynasty_start_epoch = Map.empty,
+  casper_total_curr_dyn_deposits = 0,
+  casper_total_prev_dyn_deposits = 0,
+  casper_block_number = 0,
+  casper_next_validator_index = 0
+\<rparr>"
+
+axiomatization casper_epoch_length :: nat
+axiomatization casper_default_end_dynasty :: dynasty
+axiomatization casper_min_deposit_size :: wei
+axiomatization casper_dynasty_logout_delay :: nat
+axiomatization casper_withdrawal_delay :: nat
+
+(* Node.v *)
+
 
 
 (* The immediate goal is to somehow instantiate the "casper" locale in
    DynamicValidatorSetOneMessage.thy *)
+
+(* member_1 *)
+(* member_2 *)
+(* hash_parent *)
+(* genesis *)
+(* vset_fwd *)
+(* vset_rear *)
+(* vset_chosen *)
 
 end
