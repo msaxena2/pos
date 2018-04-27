@@ -30,7 +30,7 @@ typedecl signature
 
 record deposit =
   deposit_validation_addr :: address
-  deposit_withdrwawal_addr :: address
+  deposit_withdrawal_addr :: address
   deposit_amount :: wei
 
 record vote =
@@ -279,8 +279,11 @@ definition procContractCallTx :: "nat \<Rightarrow> transaction \<Rightarrow> ca
               (let withdrawal_addr = deposit_withdrawal_addr d in
               (let start_dynasty = casper_current_epoch st + 2 in
               (let validator_data =
-                 mkValidatorData validation_addr withdrawal_addr deposits start_dynasty
-                                 casper_default_end_dynasty in
+                 \<lparr> validator_addr = validation_addr,
+                   validator_withdrawal_addr = withdrawal_addr,
+                   validator_deposit = deposits,
+                   validator_start_dynasty = start_dynasty,
+                   validator_end_dynasty = casper_default_end_dynasty \<rparr> in
               (let validators' = [next_validator_index \<mapsto> validator_data] ++ validators in
               (let st'0 = st\<lparr> casper_validators := validators' \<rparr> in
               (let st'1 = st'0\<lparr>casper_next_validator_index := next_validator_index + 1 \<rparr> in
@@ -303,9 +306,9 @@ definition procContractCallTx :: "nat \<Rightarrow> transaction \<Rightarrow> ca
             (case epochs target_epoch of Some epoch_data \<Rightarrow>
               (let voted = epoch_voted epoch_data in
               (if validator_index \<notin> set voted then
-                (let voted' = rcons voted validator_index in
+                (let voted' = voted @ [validator_index] in
                 (let epoch_data' = epoch_data\<lparr> epoch_voted := voted' \<rparr> in
-                (let epochs' = upd target_epoch epoch_data' epochs in
+                (let epochs' = epochs( target_epoch \<mapsto> epoch_data' ) in
                 (let st' = st\<lparr> casper_epochs := epochs' \<rparr> in
                 (st', [])))))
                else
@@ -327,7 +330,7 @@ definition procContractCallTx :: "nat \<Rightarrow> transaction \<Rightarrow> ca
               (let (end_dynasty :: nat) = current_dynasty + casper_dynasty_logout_delay in
               (let valid_block_epoch = (current_epoch = block_number div casper_epoch_length) in
               (let valid_epoch = (epoch <= current_epoch) in
-              (let valid_sig = sigValid_epoch addr validator_index epoch sig in
+              (let valid_sig = sigValidEpoch addr validator_index epoch sig in
               (let valid_dynasty = (end_dynasty < validator_end_dynasty validator) in
               (if valid_block_epoch \<and> valid_epoch \<and> valid_sig \<and> valid_dynasty then
                 (let validator' = validator\<lparr> validator_end_dynasty := end_dynasty \<rparr> in
@@ -361,7 +364,8 @@ definition procContractCallTx :: "nat \<Rightarrow> transaction \<Rightarrow> ca
                   (let validators' = deleteValidator validator_index validators in
                   (* return deposit *)
                   (let st' = st\<lparr> casper_validators := validators' \<rparr> in
-                  (let sa' = [mkSA validator_withdrawal_addr deposit] in
+                  (let sa' = [\<lparr> send_account_addr = validator_withdrawal_addr,
+                                send_account_wei = deposit \<rparr>] in
                     (st', sa'))))
                  else
                    (st, []))))
@@ -395,8 +399,8 @@ definition procContractCallTx :: "nat \<Rightarrow> transaction \<Rightarrow> ca
         (let validator_addr = validator_addr validator in
         (* look up deposit for validator in current epoch *)
         (case validator_deposit current_epoch of Some deposit \<Rightarrow>
-          (let valid_sig_1 = sigValid_epochs validator_addr validator_index_1 target_hash_1 target_epoch_1 source_epoch_1 sig_1 in
-          (let valid_sig_2 = sigValid_epochs validator_addr validator_index_2 target_hash_2 target_epoch_2 source_epoch_2 sig_2 in
+          (let valid_sig_1 = sigValidEpochs validator_addr validator_index_1 target_hash_1 target_epoch_1 source_epoch_1 sig_1 in
+          (let valid_sig_2 = sigValidEpochs validator_addr validator_index_2 target_hash_2 target_epoch_2 source_epoch_2 sig_2 in
           (let valid_indexes = (validator_index_1 = validator_index_2) in
           (let valid_hashes_epochs = \<not>((target_hash_1 = target_hash_1) \<and> (target_epoch_1 = target_epoch_2) \<and> (source_epoch_1 = source_epoch_2)) in
           (let epoch_cond_1 = (target_epoch_2 < target_epoch_1 \<and> source_epoch_1 < source_epoch_2) in
@@ -405,7 +409,8 @@ definition procContractCallTx :: "nat \<Rightarrow> transaction \<Rightarrow> ca
           (if valid_sig_1 \<and> valid_sig_2 \<and> valid_indexes \<and> valid_hashes_epochs \<and> valid_targets then
             (let validators' = deleteValidator validator_index_1 validators in
             (let st' = st\<lparr>casper_validators := validators'\<rparr> in
-            (let sa' = [mkSA sender_addr deposit] in (* FIXME: scale factor? *)
+            (let sa' = [\<lparr> send_account_addr = sender_addr,
+                          send_account_wei = deposit \<rparr>] in (* FIXME: scale factor? *)
               (st', sa'))))
           else
             (st, [])))))))))
