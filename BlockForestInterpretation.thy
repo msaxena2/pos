@@ -63,6 +63,7 @@ record transaction =
 record block =
   block_prevBlockHash :: hash
   block_txs :: "transaction list"
+  block_number :: nat
 (* shall I add blockNumber here? *)
 
 axiomatization GenesisBlock :: block
@@ -257,7 +258,7 @@ record sendAccount =
 
 definition procContractCallTx :: "nat \<Rightarrow> transaction \<Rightarrow> casperData
   \<Rightarrow> casperData * sendAccount list"
-  where "procContractCallTx block_number t st =
+  where "procContractCallTx bn t st =
     (let sender = tx_sender t in
     (let validators = casper_validators st in
     (let epochs = casper_epochs st in
@@ -271,7 +272,7 @@ definition procContractCallTx :: "nat \<Rightarrow> transaction \<Rightarrow> ca
           (case sender of AddrSender sender_addr \<Rightarrow>
             (let amount = deposit_amount d in
             (let valid_block_epoch =
-              (current_epoch = block_number div casper_epoch_length) in
+              (current_epoch = bn div casper_epoch_length) in
             (let valid_amount = (casper_min_deposit_size <= amount) in
             (if valid_block_epoch \<and> valid_amount then
               (let deposits = [casper_current_dynasty st \<mapsto> amount] in
@@ -328,7 +329,7 @@ definition procContractCallTx :: "nat \<Rightarrow> transaction \<Rightarrow> ca
             (case validators validator_index of Some validator \<Rightarrow>
               (let addr = validator_addr validator in
               (let (end_dynasty :: nat) = current_dynasty + casper_dynasty_logout_delay in
-              (let valid_block_epoch = (current_epoch = block_number div casper_epoch_length) in
+              (let valid_block_epoch = (current_epoch = bn div casper_epoch_length) in
               (let valid_epoch = (epoch <= current_epoch) in
               (let valid_sig = sigValidEpoch addr validator_index epoch sig in
               (let valid_dynasty = (end_dynasty < validator_end_dynasty validator) in
@@ -421,6 +422,27 @@ definition procContractCallTx :: "nat \<Rightarrow> transaction \<Rightarrow> ca
     | _ \<Rightarrow>
       (st, []))))))))))"
 
+
+definition procContractCallBlock_aux :: "nat \<Rightarrow> transaction \<Rightarrow> (casperData * sendAccount list) \<Rightarrow>
+  casperData * sendAccount list"
+  where
+"procContractCallBlock_aux bn t ps = (
+   let ps' = procContractCallTx bn t (fst ps) in
+   (fst ps', snd ps @ snd ps'))"
+
+definition procContractCallBlock :: "block \<Rightarrow> casperData * sendAccount list
+   \<Rightarrow> casperData * sendAccount list"
+  where
+"procContractCallBlock b ps =
+   (fold (procContractCallBlock_aux (block_number b)) (block_txs b) ps)"
+
+definition casper_state_bc :: "casperData \<Rightarrow> blockchain \<Rightarrow> (casperData * sendAccount list)"
+  where
+"casper_state_bc init bc = fold procContractCallBlock bc (init, [])"
+
+definition casper_state_bc_init :: "blockchain \<Rightarrow> casperData * sendAccount list"
+  where
+"casper_state_bc_init bc = casper_state_bc initCasperData bc"
 
 (* The immediate goal is to somehow instantiate the "casper" locale in
    DynamicValidatorSetOneMessage.thy *)
