@@ -45,7 +45,9 @@ record logout =
   logout_epoch :: epoch
   logout_sig ::signature
 
-type_synonym sender = address (* any need to treat NullSender specially?  *)
+datatype sender =
+  NullSender
+| AddrSender address
 
 datatype contractCall = DepositCall deposit 
   | VoteCall vote
@@ -266,10 +268,10 @@ definition procContractCallTx :: "nat \<Rightarrow> transaction \<Rightarrow> ca
     (case tx_call t of
         DepositCall d \<Rightarrow>
         (* check non-null sender *)
-          (if sender is AddrSender sender_addr then
+          (case sender of AddrSender sender_addr \<Rightarrow>
             (let amount = deposit_amount d in
             (let valid_block_epoch =
-              (current_epoch == block_number / casper_epoch_length) in
+              (current_epoch = block_number div casper_epoch_length) in
             (let valid_amount = (casper_min_deposit_size <= amount) in
             (if valid_block_epoch \<and> valid_amount then
               (let deposits = [casper_current_dynasty st \<mapsto> amount] in
@@ -285,7 +287,7 @@ definition procContractCallTx :: "nat \<Rightarrow> transaction \<Rightarrow> ca
                 (st'1, [])))))))))
              else
               (st, [])))))
-           else
+           | _ \<Rightarrow>
              (st, []))
 
       | VoteCall v \<Rightarrow>
@@ -295,12 +297,12 @@ definition procContractCallTx :: "nat \<Rightarrow> transaction \<Rightarrow> ca
           (let source_epoch = vote_source_epoch v in
           (let sig = vote_sig v in
           (* look up validator *)
-          (if find validator_index validators is Some validator then (* this has to be case *)
+          (case validators validator_index of Some validator \<Rightarrow>
             (let validation_addr = validator_addr validator in
             (* look up epoch *)
-            (if find target_epoch epochs is Some epoch_data then
+            (case epochs target_epoch of Some epoch_data \<Rightarrow>
               (let voted = epoch_voted epoch_data in
-              (if validator_index notin voted then
+              (if validator_index \<notin> set voted then
                 (let voted' = rcons voted validator_index in
                 (let epoch_data' = epoch_data\<lparr> epoch_voted := voted' \<rparr> in
                 (let epochs' = upd target_epoch epoch_data' epochs in
@@ -308,26 +310,25 @@ definition procContractCallTx :: "nat \<Rightarrow> transaction \<Rightarrow> ca
                 (st', [])))))
                else
                  (st, [])))
-             else
+             | None \<Rightarrow>
                (st, [])))
-           else
+           | None \<Rightarrow>
              (st, [])))))))
 
       | LogoutCall l \<Rightarrow>
     (* check non-null sender *)
-          (if sender is AddrSender sender_addr then
+          (case sender of AddrSender sender_addr \<Rightarrow>
             (let validator_index = logout_validator_index l in
             (let epoch = logout_epoch l in
             (let sig = logout_sig l in
             (* look up validator *)
-            (if find validator_index validators is Some validator then
+            (case validators validator_index of Some validator \<Rightarrow>
               (let addr = validator_addr validator in
-              (let end_dynasty = current_dynasty + casper_dynasty_logout_delay in
-              (let validator_end_dynasty = validator_end_dynasty in
-              (let valid_block_epoch = (current_epoch = block_number / casper_epoch_length) in
+              (let (end_dynasty :: nat) = current_dynasty + casper_dynasty_logout_delay in
+              (let valid_block_epoch = (current_epoch = block_number div casper_epoch_length) in
               (let valid_epoch = (epoch <= current_epoch) in
               (let valid_sig = sigValid_epoch addr validator_index epoch sig in
-              (let valid_dynasty = (end_dynasty < validator_end_dynasty) in
+              (let valid_dynasty = (end_dynasty < validator_end_dynasty validator) in
               (if valid_block_epoch \<and> valid_epoch \<and> valid_sig \<and> valid_dynasty then
                 (let validator' = validator\<lparr> validator_end_dynasty := end_dynasty \<rparr> in
                 (let validators' = [validator_index \<mapsto> validator'] ++ validators in
@@ -335,24 +336,24 @@ definition procContractCallTx :: "nat \<Rightarrow> transaction \<Rightarrow> ca
                 (* TODO: update dynasty_wei_delta *)
                   (st', []))))
                else
-                 (st, [])))))))))
-             else
+                 (st, []))))))))
+             | None \<Rightarrow>
                (st, [])))))
-           else
+           | _ \<Rightarrow>
              (st, []))
 
   | WithdrawCall validator_index \<Rightarrow>
       (* check non-null sender *)
-      (if sender is AddrSender sender_addr then
+      (case sender of AddrSender sender_addr \<Rightarrow>
         (* look up validator *)
-        (if find validator_index validators is Some validator then
+        (case validators validator_index of Some validator \<Rightarrow>
           (let validator_deposit = validator_deposit validator in
           (let validator_withdrawal_addr = validator_withdrawal_addr validator in
           (let validator_end_dynasty = validator_end_dynasty validator in
           (* look up end epoch of validator *)
-          (if find (validator_end_dynasty + 1) dynasty_start_epoch is Some end_epoch then
+          (case dynasty_start_epoch (validator_end_dynasty + 1) of Some end_epoch \<Rightarrow>
             (* look up validator deposit for end epoch *)
-            (if find end_epoch validator_deposit is Some deposit then
+            (case validator_deposit end_epoch of Some deposit \<Rightarrow>
               (let valid_dynasty = validator_end_dynasty + 1 \<le> current_dynasty in
               (let valid_epoch = end_epoch + casper_withdrawal_delay \<le> current_epoch in
                 (if valid_dynasty \<and> valid_epoch then
@@ -364,20 +365,20 @@ definition procContractCallTx :: "nat \<Rightarrow> transaction \<Rightarrow> ca
                     (st', sa'))))
                  else
                    (st, []))))
-             else
+             | None \<Rightarrow>
                (st, []))
-           else
+           | None \<Rightarrow>
              (st, [])))))
-         else
+         | None \<Rightarrow>
            (st, []))
-       else
+       | _ \<Rightarrow>
          (st, []))
 
   | InitializeEpochCall e \<Rightarrow> (st, [])
 
-  | SlashCall v1 v2 \<Rightarrow>
+  | SlashCall (v1, v2) \<Rightarrow>
     (* check non-null sender *)
-    (if sender is AddrSender sender_addr then
+    (case sender of AddrSender sender_addr \<Rightarrow>
       (let validator_index_1 = vote_validator_index v1 in
       (let validator_index_2 = vote_validator_index v2 in
       (let target_hash_1 = vote_target_hash v1 in
@@ -389,14 +390,14 @@ definition procContractCallTx :: "nat \<Rightarrow> transaction \<Rightarrow> ca
       (let sig_1 = vote_sig v1 in
       (let sig_2 = vote_sig v1 in
       (* look up validator *)
-      (if find validator_index_1 validators is Some validator then
+      (case validators validator_index_1 of Some validator \<Rightarrow>
         (let validator_deposit = validator_deposit validator in
         (let validator_addr = validator_addr validator in
         (* look up deposit for validator in current epoch *)
-        (if find current_epoch validator_deposit is Some deposit then
+        (case validator_deposit current_epoch of Some deposit \<Rightarrow>
           (let valid_sig_1 = sigValid_epochs validator_addr validator_index_1 target_hash_1 target_epoch_1 source_epoch_1 sig_1 in
           (let valid_sig_2 = sigValid_epochs validator_addr validator_index_2 target_hash_2 target_epoch_2 source_epoch_2 sig_2 in
-          (let valid_indexes = validator_index_1 == validator_index_2 in
+          (let valid_indexes = (validator_index_1 = validator_index_2) in
           (let valid_hashes_epochs = \<not>((target_hash_1 = target_hash_1) \<and> (target_epoch_1 = target_epoch_2) \<and> (source_epoch_1 = source_epoch_2)) in
           (let epoch_cond_1 = (target_epoch_2 < target_epoch_1 \<and> source_epoch_1 < source_epoch_2) in
           (let epoch_cond_2 = (target_epoch_1 < target_epoch_2 \<and> source_epoch_2 < source_epoch_1) in
@@ -408,11 +409,11 @@ definition procContractCallTx :: "nat \<Rightarrow> transaction \<Rightarrow> ca
               (st', sa'))))
           else
             (st, [])))))))))
-        else
+        | None \<Rightarrow>
           (st, []))))
-      else
+      | None \<Rightarrow>
         (st, []))))))))))))
-    else
+    | _ \<Rightarrow>
       (st, []))))))))))"
 
 
