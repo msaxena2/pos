@@ -17,11 +17,14 @@ the validators and quorum of cardinality greater than 1/3 of the validators."
   assumes "\<And> q1 q2 . \<exists> q3 . \<forall> n . n \<in>\<^sub>2 q3 \<longrightarrow> n \<in>\<^sub>1 q1 \<and> n \<in>\<^sub>1 q2"  
     -- "This is the only property of types @{typ 'q1} and @{typ 'q2} that we need: 
 2/3 quorums have 1/3 intersection"
+(*
+views are heights. 
 
+*)
 record ('n,'h)state =
   -- "@{typ 'n} is the type of validators (nodes), @{typ 'h} hashes, and views are @{typ nat}"
   -- "vote_msg node hash view view_src"
-  vote_msg :: "'n \<Rightarrow> 'h \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool"
+vote_msg :: "'n \<Rightarrow> 'h \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool"
 
 locale casper = byz_quorums +
   -- "Here we make assumptions about hashes. In reality any message containing a hash not satisfying those
@@ -69,10 +72,13 @@ lemma parent_ancestor:"h1 \<leftarrow> h2 = nth_ancestor 1 h1 h2"
 
 text {* All messages in epoch @{term "0::nat"} are ignored;  @{term "0::nat"} is used as a special value (was @{term "-1::int"} in the original model). *}
 
+text  {*
+    s is the state of the network, pre, now are epochs, and q is the quorum
+  *}
 definition justified_link
 where
 "justified_link s q parent pre new now \<equiv>
-   (\<forall> n. n \<in>\<^sub>1 q \<longrightarrow> vote_msg s n new now pre) \<and> nth_ancestor (now - pre) parent new \<and> now > pre
+  (\<forall> n. n \<in>\<^sub>1 q \<longrightarrow> vote_msg s n new now pre) \<and> nth_ancestor (now - pre) parent new \<and> now > pre
 "
 
 lemma ancestor_means :
@@ -116,6 +122,8 @@ definition one_third_slashed where "one_third_slashed s \<equiv> \<exists> q . \
 lemmas slashed_defs = slashed_def slashed_DBL_VOTE_def slashed_SURROUND_def one_third_slashed_def
 lemmas order_defs = class.linorder_axioms_def class.linorder_def class.order_def class.preorder_def 
   class.order_axioms_def class.order_bot_def class.order_bot_axioms_def linorder_axioms[where ?'a=nat]
+
+
 lemmas casper_defs = slashed_defs vote_msg_def fork_def casper_assms_def
 
 lemma l0: assumes "justified_link s q1 h2 v2 h1 v1"
@@ -340,7 +348,79 @@ next
 qed
 
 lemma safety: assumes "fork s" shows "one_third_slashed s"
-using assms fork_def safety' by blast
+  using assms fork_def safety' by blast
+
+(* How to prove this is adequate? *)
+
+(* Is this from the paper? *)
+
+(* Vote \<equiv> <validator_key, s, t, h(s), h(t)> *)
+
+(*
+definition justified_link
+where
+"justified_link s q parent pre new now \<equiv>
+   (\<forall> n. n \<in>\<^sub>1 q \<longrightarrow> vote_msg s n new now pre) \<and> nth_ancestor (now - pre) parent new \<and> now > pre
+"
+*)
+
+
+(* I think this means node s with parent "parent" is justified in height pre 
+  iff there is a justified_link between s, q  *)
+(* Justified - 
+   justified s parent pre; justified_link s q parent pre new now 
+   "finalized s q h v child \<equiv> (h \<leftarrow> child \<and> justified s h v \<and> justified_link s q h v child (v + 1))"
+*)
+
+text {* The liveness theorem is as follows - 
+        Given s is the tallest justified checkpoint,
+        and t is a checkpoint with a validator's 
+        vote (thus, s is t's ancestor). Now, 
+        any node t' s.t. t' is s' ancestor, and h(t') > h(t) can
+        be justified by adding a supermajority link, and t' 
+        can be finalized by adding a supermajority link from t' to t''
+        (where t'' is t' 's child *}
+
+
+
+(* A sketch proof for plausible liveness should be as follows:
+   We need the tallest justified node. 
+   Assume we have - 
+   A justified node P. 
+   A vote for node Q, where Q is the nth Ancestor of P.
+   Assume R s.t. h(P) < h(R) = 1. 
+   Assume S is R's child. 
+   then, prove R can always be finalized.
+
+record ('n,'h)state =
+  -- "@{typ 'n} is the type of validators (nodes), @{typ 'h} hashes, and views are @{typ nat}"
+  -- "vote_msg node hash view view_src"
+  vote_msg :: "'n \<Rightarrow> 'h \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool"
+*)
+
+(* "finalized s q h v child \<equiv> (h \<leftarrow> child \<and> justified s h v \<and> justified_link s q h v child (v + 1))"*)
+(*
+lemma plausible_liveness: 
+    "justified_link state quorum original_state original_epoch tallest_justified tallest_justified_epoch \<Rightarrow>
+    \<not> one_third_slashed state \<Rightarrow>
+    validator \<in>\<^sub>1 quorum \<and> vote_msg state validator voted_state voted_epoch tallest_justified_epoch \<Rightarrow>
+    (nth_ancestor (finalized_state_epoch - tallest_justified_epoch) tallest_justified finalized_state)
+     \<and> (finalized_state_epoch - voted_epoch) = 1 \<Rightarrow> 
+    justified_link state quorum finalized_state finalized_state_epoch finalized_state_child finalized_state_child_epoch \<Rightarrow>
+    "finalized state quorum finalized_state finalized_state_epoch finalized_state_child" *)
+
+
+theorem plausible_liveness:
+  assumes "justified_link state quorum original_state original_epoch tallest_justified tallest_justified_epoch"
+  assumes "vote_msg state validator voted_state voted_epoch tallest_justified_epoch" 
+  assumes "(nth_ancestor (finalized_state_epoch - tallest_justified_epoch) tallest_justified finalized_state)
+          \<and> (finalized_state_epoch - voted_epoch) = 1"
+  assumes "justified_link state quorum finalized_state finalized_state_epoch finalized_state_child finalized_state_child_epoch"
+  shows "finalized state quorum finalized_state finalized_state_epoch finalized_state_child"
+  using assms
+
+
+
 
 end
 
